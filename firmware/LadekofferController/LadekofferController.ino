@@ -72,6 +72,10 @@ static constexpr float VBAT_PRESENT_V  = 2.0f;
 static constexpr float VBAT_FULL_V     = 4.10f;
 static constexpr float VBAT_ABS_MAX_V  = 4.30f;
 
+// change thresholds for event printing
+static constexpr float VBAT_DELTA_REPORT_V = 0.05f;
+static constexpr float TEMP_DELTA_REPORT_C = 0.5f;
+
 // ---------------- Temperatur ----------------
 static constexpr float TEMP_ALARM_ON_C  = 60.0f;
 static constexpr float TEMP_ALARM_OFF_C = 57.0f;
@@ -94,12 +98,17 @@ struct SlotState {
   float vbat = 0.0f;
 };
 static SlotState slots[10];
+static SlotState prevSlots[10];
 
 static float tempC = NAN;
+static float prevTempC = NAN;
 static bool tempAlarm = false;
 
 static bool alarmMuted = false;
 static bool lastAnyFault = false;
+static bool prevAnyFault = false;
+
+static bool prevAhtOk = false;
 
 static uint32_t lastScanSlotsMs = 0;
 static uint32_t lastTempMs = 0;
@@ -119,7 +128,8 @@ static inline void setMuxChannel(uint8_t ch) {
   digitalWrite(PIN_MUX_A, (ch & 0x01) ? HIGH : LOW);
   digitalWrite(PIN_MUX_B, (ch & 0x02) ? HIGH : LOW);
   digitalWrite(PIN_MUX_C, (ch & 0x04) ? HIGH : LOW);
-  delayMicroseconds(60);
+  // allow settling after switching multiplexer
+  delayMicroseconds(200);
 }
 
 static inline float readAdcVolts(int adcPin) {
@@ -146,14 +156,46 @@ static bool readStatActive(uint8_t slotIndex0) {
   return STAT_ACTIVE_LOW ? activeLow : !activeLow;
 }
 
+static int readStatRawPin(uint8_t slotIndex0) {
+  uint8_t pin;
+  switch (slotIndex0) {
+    case 0:  pin = MCP_STAT_1;  break;
+    case 1:  pin = MCP_STAT_2;  break;
+    case 2:  pin = MCP_STAT_3;  break;
+    case 3:  pin = MCP_STAT_4;  break;
+    case 4:  pin = MCP_STAT_5;  break;
+    case 5:  pin = MCP_STAT_6;  break;
+    case 6:  pin = MCP_STAT_7;  break;
+    case 7:  pin = MCP_STAT_8;  break;
+    case 8:  pin = MCP_STAT_9;  break;
+    default: pin = MCP_STAT_10; break;
+  }
+  return mcp.digitalRead(pin);
+}
+
 static float readSlotVbat(uint8_t slotIndex0) {
   if (slotIndex0 <= 7) {
     setMuxChannel(slotIndex0);
-    return readAdcVolts(PIN_ADC_MUX_A) * VBAT_DIV_RATIO;
+    // discard first reading after switching, then average few readings
+    const int N = 3;
+    uint32_t sumMv = 0;
+    for (int i = 0; i < N; ++i) {
+      sumMv += analogReadMilliVolts(PIN_ADC_MUX_A);
+      delayMicroseconds(50);
+    }
+    float mv = (float)sumMv / N;
+    return (mv / 1000.0f) * VBAT_DIV_RATIO;
   } else {
     uint8_t ch = slotIndex0 - 8; // Slot9->0, Slot10->1
     setMuxChannel(ch);
-    return readAdcVolts(PIN_ADC_MUX_B) * VBAT_DIV_RATIO;
+    const int N = 3;
+    uint32_t sumMv = 0;
+    for (int i = 0; i < N; ++i) {
+      sumMv += analogReadMilliVolts(PIN_ADC_MUX_B);
+      delayMicroseconds(50);
+    }
+    float mv = (float)sumMv / N;
+    return (mv / 1000.0f) * VBAT_DIV_RATIO;
   }
 }
 
@@ -182,8 +224,14 @@ static void updateAckButton(bool anyFault) {
 
   // kurzer Druck -> bei Fehler quittieren (Ton aus), LED bleibt wie gehabt
   if (!btnStable && btnLastStable) {
-    if (anyFault) alarmMuted = true;
+    Serial.println(F("Button: short press detected (ack)."));
+    if (anyFault) {
+      alarmMuted = true;
+      Serial.println(F("Alarm muted by button."));
+    }
   }
+
+  // long press / hold could be observed here in the future
 
   btnLastStable = btnStable;
 }
@@ -193,9 +241,11 @@ static void readTemperature() {
   if (!ahtOk) { tempC = NAN; return; }
 
   sensors_event_t hum, temp;
-  if (!aht.getEvent(&hum, &temp)) { tempC = NAN; return; }
-
-  tempC = temp.temperature;
+  // some AHT libs return void for getEvent; check behavior - original code used boolean
+  // We'll call it and trust the library fills the structs.
+  aht.getEvent(&hum, &temp);
+  float newTempC = temp.temperature;
+  tempC = newTempC;
 
   if (!tempAlarm && !isnan(tempC) && tempC >= TEMP_ALARM_ON_C) {
     tempAlarm = true;
@@ -204,11 +254,57 @@ static void readTemperature() {
   if (tempAlarm && !isnan(tempC) && tempC <= TEMP_ALARM_OFF_C) {
     tempAlarm = false;
   }
+
+  // report temperature changes
+  if (isnan(prevTempC) || fabs(tempC - prevTempC) >= TEMP_DELTA_REPORT_C) {
+    if (isnan(tempC)) {
+      Serial.println(F("Temperature: N/A"));
+    } else {
+      Serial.printf("Temperature: %0.1f C (alarm=%s)\n", tempC, tempAlarm ? "YES" : "no");
+    }
+    prevTempC = tempC;
+  }
 }
 
 // ---------------- Slot Scan ----------------
+static void printSlotChange(int idx, const SlotState &oldS, const SlotState &s) {
+  bool any = false;
+  String msg;
+  msg.reserve(128);
+  msg += "Slot ";
+  msg += String(idx + 1);
+  msg += ": ";
+
+  if (oldS.present != s.present) {
+    msg += s.present ? "present " : "removed ";
+    any = true;
+  }
+  if (oldS.charging != s.charging) {
+    msg += s.charging ? "charging " : "not-charging ";
+    any = true;
+  }
+  if (oldS.full != s.full) {
+    msg += s.full ? "full " : "not-full ";
+    any = true;
+  }
+  if (oldS.fault != s.fault) {
+    msg += s.fault ? "FAULT " : "fault-cleared ";
+    any = true;
+  }
+  if (fabs(oldS.vbat - s.vbat) >= VBAT_DELTA_REPORT_V) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%0.3fV", s.vbat);
+    msg += buf;
+    any = true;
+  }
+  if (any) {
+    Serial.println(msg);
+  }
+}
+
 static void scanSlotsOnce() {
   for (int i = 0; i < 10; i++) {
+    SlotState old = slots[i];
     SlotState &s = slots[i];
     float v = readSlotVbat(i);
     bool statActive = readStatActive(i);
@@ -218,6 +314,12 @@ static void scanSlotsOnce() {
     s.charging = s.present && statActive;
     s.full     = s.present && !s.charging && (v >= VBAT_FULL_V);
     s.fault    = s.present && (v > VBAT_ABS_MAX_V);
+
+    // print per-slot changes compared to previous
+    printSlotChange(i, prevSlots[i], s);
+
+    // persist for next comparison
+    prevSlots[i] = s;
   }
 }
 
@@ -245,10 +347,15 @@ static void updateOutputs() {
   if (!anyFault) alarmMuted = false;
   // Neuer Fehler -> Quittierung aufheben
   if (anyFault && !lastAnyFault) alarmMuted = false;
-  lastAnyFault = anyFault;
 
   // Quittierung per Button (kurz)
   updateAckButton(anyFault);
+
+  // report anyFault change
+  if (anyFault != prevAnyFault) {
+    Serial.printf("AnyFault changed: %s -> %s\n", prevAnyFault ? "YES" : "no", anyFault ? "YES" : "no");
+    prevAnyFault = anyFault;
+  }
 
   bool blink = ((millis() / BLINK_MS) % 2) == 0;
 
@@ -287,6 +394,8 @@ static void updateOutputs() {
     buzState = false;
     buzzerOn(false);
   }
+
+  lastAnyFault = anyFault;
 }
 
 // ---------------- Serial Debug ----------------
@@ -346,9 +455,39 @@ static void handleSerial() {
   } else if (cmd == "unmute") {
     alarmMuted = false;
     Serial.println(F("Unmuted."));
+  } else if (cmd == "diag" || cmd == "d") {
+    Serial.println(F("Diagnostic: MCP STAT raw pins:"));
+    for (int i = 0; i < 10; ++i) {
+      int raw = readStatRawPin(i);
+      Serial.printf(" STAT %2d: raw=%d\n", i + 1, raw);
+    }
+    Serial.println(F("End diagnostic."));
   } else {
-    Serial.println(F("Commands: status | mute | unmute"));
+    Serial.println(F("Commands: status | mute | unmute | diag"));
   }
+}
+
+// ---------------- Startup test ----------------
+static void startupTest() {
+  Serial.println(F("Running startup test: buzzer + LEDs"));
+
+  // Buzzer short beep
+  buzzerOn(true);
+  delay(180);
+  buzzerOn(false);
+  delay(200);
+
+  // LEDs sequence: red -> yellow -> green
+  setLeds(true, false, false);
+  delay(200);
+  setLeds(false, true, false);
+  delay(200);
+  setLeds(false, false, true);
+  delay(200);
+  setLeds(false, false, false);
+  delay(100);
+
+  Serial.println(F("Startup test done."));
 }
 
 // ---------------- Arduino ----------------
@@ -397,12 +536,22 @@ void setup() {
   ahtOk = aht.begin(&Wire);
   if (!ahtOk) Serial.println(F("WARN: AHT20 not found (sensor fault -> RED blink)."));
 
+  // run a small hardware test so someone at device can hear/see basic functionality
+  startupTest();
+
+  // initial reads and state setup
   scanSlotsOnce();
   readTemperature();
   updateOutputs();
 
+  // copy current state to prev state so further prints only show changes
+  for (int i = 0; i < 10; ++i) prevSlots[i] = slots[i];
+  prevTempC = tempC;
+  prevAhtOk = ahtOk;
+  prevAnyFault = lastAnyFault;
+
   Serial.println(F("Ladekoffer Controller ready."));
-  Serial.println(F("Commands: status | mute | unmute"));
+  Serial.println(F("Commands: status | mute | unmute | diag"));
   printStatus();
 }
 

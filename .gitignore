@@ -1,0 +1,20 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Arduino / build artifacts
+*.bin
+*.elf
+*.hex
+*.map
+
+# Arduino IDE
+*.log
+
+# VS Code / PlatformIO (falls später genutzt)
+.vscode/
+.pio/
+
+# Temporary
+*.tmp
+*.bak

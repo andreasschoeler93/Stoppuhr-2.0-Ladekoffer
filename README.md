@@ -1,77 +1,80 @@
-# Ladekoffer Controller (Stoppuhr 2.0)
+# Ladekoffer-Controller (v0.1.0)
 
-Firmware für den Ladekoffer-Controller mit 10 Slots (TP4056), Ampel-LEDs und Temperaturüberwachung.
+Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
+Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
+(Repository `Stoppuhr`). Die Taster bleiben unverändert; sie laden nur im Koffer und haben keine Verbindung zur Platine.
 
-## Features
+Versionsverlauf: [CHANGELOG.md](CHANGELOG.md). Verdrahtung: [docs/wiring.md](docs/wiring.md). Fehlersuche: [docs/troubleshooting.md](docs/troubleshooting.md).
 
-- 10 Slots: Präsenz/VBAT-Messung über 2× 74HC4051 (MUX) auf 2 ADC-Pins
-- Ladezustand pro Slot über MCP23017 (I²C) via TP4056-STAT (CHRG, active LOW)
-- Ampel-Logik (wie im Projekt definiert):
-  - **Grün:** alle Taster vorhanden **und** voll
-  - **Gelb:** mindestens ein Taster lädt
-    - gelb **dauerhaft:** alle Taster vorhanden
-    - gelb **blinkend:** nicht alle Taster vorhanden, aber es wird geladen
-  - **Rot:** Fehler
-    - rot **dauerhaft:** Fehler aktiv (z. B. Temperaturalarm oder Slot-Fault)
-    - rot **blinkend:** Sensorfehler (AHT20 fehlt/ungültig)
-- Pieper nur bei Fehler (z. B. Temperaturalarm); **quittierbar über Taster an TRIG_ALL**
-- Serielle Debug-Kommandos: `status`, `mute`, `unmute`
+## Hardware (Schaltplan V3)
 
-## Hardware / Zielplattform
+- MCU: XIAO ESP32-C3
+- MCP23017 `U2` (0x20): STAT der 10 TP4056, Pieper, Treiber für externe LEDs
+- 2× 74HC4051 (`U3`, `U4`): Akkuspannung der Slots auf 2 ADC-Pins (Teiler 200 k / 100 k, Faktor 3)
+- AHT20: Temperatur und Feuchte
+- Ampel (Rot/Gelb/Grün) direkt am ESP, Taster `TRIG_ALL` quittiert den Alarm
 
-- MCU: **Seeed Studio XIAO ESP32-C3**
-- I²C Expander: **MCP23017** (Adresse 0x20)
-- Temperatur: **AHT20** (I²C)
-- MUX: **2× 74HC4051**
-- Ladeboards: **TP4056** (STAT = CHRG, active LOW)
+Nicht benutzt: der zweite MCP23017 `U5` (0x21), der über `MAG_TRIG` die Magnetkontakte der Slots schaltet.
 
-## Pinmapping (Firmware)
+## Ampel und Pieper
 
-| Signal | GPIO |
-|---|---:|
-| ADC_MUX_A (Slots 1..8) | GPIO2 |
-| ADC_MUX_B (Slots 9..10) | GPIO3 |
-| LED_RED | GPIO4 |
-| TRIG_ALL (Button: Ack Pieper) | GPIO5 |
-| I²C SDA | GPIO6 |
-| I²C SCL | GPIO7 |
-| MUX_A | GPIO8 |
-| MUX_B | GPIO9 |
-| MUX_C | GPIO10 |
-| LED_GRN | GPIO20 |
-| LED_YEL | GPIO21 |
+| Ampel | Bedeutung |
+| --- | --- |
+| Grün | alle Taster da und voll |
+| Gelb | mindestens ein Taster lädt (blinkt, wenn nicht alle da sind) |
+| Rot dauerhaft | Übertemperatur, Slot-Fehler (Überspannung) oder MCP23017 antwortet nicht |
+| Rot blinkend | AHT20 fehlt oder liefert keine Werte |
 
-> Hinweis: Slots 9/10 werden auf dem zweiten 4051 auf Kanal X0/X1 erwartet.
+Der Pieper ertönt nur bei Fehlern; ein kurzer Druck auf `TRIG_ALL` quittiert ihn bis zum nächsten neuen Fehler.
 
-## Abhängigkeiten (Arduino Library Manager)
+## Bauen und flashen
 
-- **Adafruit MCP23X17**
-- **Adafruit AHTX0**
+```text
+pio run
+pio run -t upload
+pio device monitor -b 115200
+```
 
-## Build & Flash (Arduino IDE)
+### Zugangsdaten (`src/secrets.h`)
 
-1. Board-Paket installieren: `esp32` by Espressif
-2. Board auswählen: *XIAO ESP32C3*
-3. Bibliotheken installieren (oben genannt)
-4. Sketch öffnen: `firmware/LadekofferController/LadekofferController.ino`
-5. Flashen
+`src/secrets.example.h` nach `src/secrets.h` kopieren (wird nicht hochgeladen) und eintragen:
+`SECRET_WIFI_SSID`/`SECRET_WIFI_PASS` (Koffer-WLAN, der Zugangspunkt des Koffer-Pi, versteckt – SSID exakt),
+`SECRET_PI_IP` (Standard `192.168.50.10`, die gemeinsame Adresse der Pis), optional `SECRET_API_KEY`.
 
-## Wichtige Konfiguration
+## Versionierung
 
-Im Sketch bitte prüfen/anpassen:
+Schema `MAJOR.MINOR.PATCH`, die Version steht in `src/config.h` (`FW_VERSION_*`) und wird beim Start und mit jeder Meldung gesendet.
+Bei jeder Änderung Version erhöhen und `CHANGELOG.md` ergänzen.
 
-- `VBAT_DIV_RATIO` (Spannungsteiler-Faktor):  
-  `Vbat = Vadc * VBAT_DIV_RATIO`
-- Schwellwerte:
-  - `VBAT_PRESENT_V`, `VBAT_FULL_V`
-  - `TEMP_ALARM_ON_C`, `TEMP_ALARM_OFF_C`
+## Aufbau (`src/`)
 
-## Serielle Befehle
+| Datei | Aufgabe |
+| --- | --- |
+| `config.h` | Pins, Schwellwerte, Zeiten, Netz, Version |
+| `board.*` | I2C, MCP23017, Multiplexer, LEDs, Pieper, Taster |
+| `sensors.*` | Slots (da/lädt/voll/Fehler) und AHT20, ohne Wartezeiten |
+| `signals.*` | Gesamtstatus, Ampel, Pieper, Quittieren |
+| `netlink.*` | WLAN und Senden an den Pi in einem eigenen Task |
+| `main.cpp` | Ablauf und serielle Befehle (`status`, `mute`, `unmute`) |
 
-- `status` : zeigt Slot-Status, Aggregate, Temperatur, Faults
-- `mute` : Pieper quittieren (falls Fehler aktiv)
-- `unmute` : Quittierung aufheben
+`loop()` wartet nie. Ohne WLAN oder Pi arbeiten Ampel, Pieper und Temperaturschutz unverändert weiter.
 
-## Lizenz
+## Schnittstelle zum Pi
 
-Siehe `LICENSE`.
+`POST http://<Pi>:1999/api/charger` (JSON, optional Header `X-Api-Key`), alle 5 s und sofort (frühestens nach 1 s) bei einer Änderung
+von Slot-Zustand, Ampel, Alarm oder Quittierung. Der Pi bewertet den Koffer als offline, wenn 30 s nichts ankommt.
+
+```json
+{"mac":"AA:BB:..","fw":"v0.1.0","uptime_s":120,"rssi":-55,
+ "temp":24.5,"humidity":40,"aht_ok":true,"temp_alarm":false,"i2c_ok":true,
+ "light":"green","fault":false,"muted":false,
+ "present":10,"charging":0,"full":10,
+ "slots":[{"n":1,"present":true,"charging":false,"full":true,"fault":false,"vbat":4.12}]}
+```
+
+`light`: `off`, `green`, `yellow`, `yellow_blink`, `red`, `red_blink`. Die Zeit stempelt der Pi selbst.
+
+## Kalibrierung
+
+- `VBAT_DIV_RATIO` (3,0 bei 200 k / 100 k): mit Multimeter gegenprüfen, Kommando `status`.
+- `VBAT_PRESENT_V`, `VBAT_FULL_V`, `TEMP_ALARM_ON_C`/`_OFF_C` in `config.h`.

@@ -18,3 +18,5 @@ Thumbs.db
 # Temporary
 *.tmp
 *.bak
+
+src/secrets.h

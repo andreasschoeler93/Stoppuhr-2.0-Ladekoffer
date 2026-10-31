@@ -66,6 +66,8 @@ void loop() {
   netlink::publish(*current);
   wake::Config wakeCfg;
   if (netlink::takeWakeConfig(wakeCfg)) wake::configure(wakeCfg);
+  remotebeep::Config beepCfg;
+  if (netlink::takeBeepConfig(beepCfg)) remotebeep::configure(beepCfg);
   wake::update();
   handleSerial();
 }

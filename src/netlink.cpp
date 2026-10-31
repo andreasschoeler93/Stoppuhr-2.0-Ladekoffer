@@ -100,6 +100,28 @@ bool parseWake(const String& body, wake::Config& out) {
 
 wake::Config pendingWake;
 bool wakePending = false;
+remotebeep::Config pendingBeep;
+bool beepPending = false;
+
+long numAfter(const String& body, const char* key, int from, long dflt) {
+  int k = body.indexOf(key, from);
+  if (k < 0) return dflt;
+  int colon = body.indexOf(':', k);
+  if (colon < 0) return dflt;
+  return strtol(body.c_str() + colon + 1, nullptr, 10);
+}
+
+// Liest "beep":{"yellow_on":..,"yellow_seq":..,"red_on":..,"red_ms":..,"red_every_ms":..}
+bool parseBeep(const String& body, remotebeep::Config& out) {
+  int b = body.indexOf("\"beep\"");
+  if (b < 0) return false;
+  out.yellowOn = numAfter(body, "\"yellow_on\"", b, 0) != 0;
+  out.yellowSeq = (uint32_t)numAfter(body, "\"yellow_seq\"", b, 0);
+  out.redOn = numAfter(body, "\"red_on\"", b, 0) != 0;
+  out.redMs = (uint16_t)constrain(numAfter(body, "\"red_ms\"", b, 2000), 100, 30000);
+  out.redEveryMs = (uint32_t)constrain(numAfter(body, "\"red_every_ms\"", b, 10000), 1000, 3600000);
+  return true;
+}
 
 int post(const Status& s) {
   static char body[1400];
@@ -114,10 +136,20 @@ int post(const Status& s) {
   if (cfg::Net::API_KEY[0]) http.addHeader("X-Api-Key", cfg::Net::API_KEY);
   int code = http.POST((uint8_t*)body, strlen(body));
   if (code == 200) {
-    wake::Config c;
-    if (parseWake(http.getString(), c) && xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-      pendingWake = c;
-      wakePending = true;
+    const String reply = http.getString();
+    wake::Config w;
+    remotebeep::Config bp;
+    const bool haveWake = parseWake(reply, w);
+    const bool haveBeep = parseBeep(reply, bp);
+    if ((haveWake || haveBeep) && xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+      if (haveWake) {
+        pendingWake = w;
+        wakePending = true;
+      }
+      if (haveBeep) {
+        pendingBeep = bp;
+        beepPending = true;
+      }
       xSemaphoreGive(mutex);
     }
   }
@@ -215,6 +247,17 @@ bool takeWakeConfig(wake::Config& out) {
   if (have) {
     out = pendingWake;
     wakePending = false;
+  }
+  xSemaphoreGive(mutex);
+  return have;
+}
+
+bool takeBeepConfig(remotebeep::Config& out) {
+  if (!mutex || xSemaphoreTake(mutex, 0) != pdTRUE) return false;
+  const bool have = beepPending;
+  if (have) {
+    out = pendingBeep;
+    beepPending = false;
   }
   xSemaphoreGive(mutex);
   return have;

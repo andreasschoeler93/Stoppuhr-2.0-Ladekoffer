@@ -1,6 +1,7 @@
 #include "signals.h"
 
 #include "board.h"
+#include "remotebeep.h"
 #include "wake.h"
 
 namespace signals {
@@ -80,6 +81,7 @@ void drive(uint32_t now) {
 
   static uint32_t lastToggle = 0;
   static bool buzzer = false;
+  static bool buzzerOut = false;
   if (st.anyFault && !st.muted) {
     uint32_t onMs, offMs;
     if (st.m.tempAlarm) { onMs = 200; offMs = 800; }
@@ -88,11 +90,15 @@ void drive(uint32_t now) {
     if (now - lastToggle >= (buzzer ? onMs : offMs)) {
       lastToggle = now;
       buzzer = !buzzer;
-      board::setBuzzer(buzzer);
     }
-  } else if (buzzer) {
+  } else {
     buzzer = false;
-    board::setBuzzer(false);
+  }
+  // Eigener Fehlerton oder Ton fuer eine Dashboard-Meldung
+  const bool wantBuzzer = buzzer || remotebeep::active(now);
+  if (wantBuzzer != buzzerOut) {
+    buzzerOut = wantBuzzer;
+    board::setBuzzer(wantBuzzer);
   }
 }
 

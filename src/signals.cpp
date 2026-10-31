@@ -1,6 +1,7 @@
 #include "signals.h"
 
 #include "board.h"
+#include "wake.h"
 
 namespace signals {
 namespace {
@@ -8,11 +9,13 @@ namespace {
 Status st;
 bool lastAnyFault = false;
 
-// Entprellter Taster; ein kurzer Druck (Loslassen) quittiert den Alarm
+// Entprellter Taster: kurzer Druck (Loslassen) quittiert den Alarm, langes Halten weckt die Taster
 bool rawLast = false;
 bool stable = false;
 bool stableLast = false;
+bool longFired = false;
 uint32_t lastChangeMs = 0;
+uint32_t pressedSinceMs = 0;
 
 void updateButton(uint32_t now) {
   bool raw = board::ackPressedRaw();
@@ -21,7 +24,15 @@ void updateButton(uint32_t now) {
     lastChangeMs = now;
   }
   if (now - lastChangeMs >= cfg::DEBOUNCE_MS) stable = raw;
-  if (!stable && stableLast && st.anyFault) st.muted = true;
+  if (stable && !stableLast) {
+    pressedSinceMs = now;
+    longFired = false;
+  }
+  if (stable && !longFired && now - pressedSinceMs >= cfg::LONG_PRESS_MS) {
+    longFired = true;
+    wake::start();
+  }
+  if (!stable && stableLast && !longFired && st.anyFault) st.muted = true;
   stableLast = stable;
 }
 

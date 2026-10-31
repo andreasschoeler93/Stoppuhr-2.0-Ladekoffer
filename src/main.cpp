@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <WiFi.h>
 
 #include "board.h"
 #include "config.h"
@@ -16,8 +17,9 @@ static void printStatus() {
   Serial.printf("Alle da=%s alle voll=%s laedt=%s Fehler=%s quittiert=%s\n", s.allPresent ? "ja" : "nein",
                 s.allFull ? "ja" : "nein", s.anyCharging ? "ja" : "nein", s.anyFault ? "ja" : "nein",
                 s.muted ? "ja" : "nein");
-  Serial.printf("WLAN: %s (%d dBm), letzter HTTP-Code: %d\n", netlink::connected() ? "verbunden" : "getrennt",
-                netlink::rssi(), netlink::lastHttpCode());
+  Serial.printf("WLAN: %s (%d dBm, Statuscode %d), letzter HTTP-Code: %d\n",
+                netlink::connected() ? "verbunden" : "getrennt", netlink::rssi(),
+                (int)WiFi.status(), netlink::lastHttpCode());
   Serial.println("Slot | da | laedt | voll | Fehler | Vbat");
   for (uint8_t i = 0; i < cfg::SLOT_COUNT; i++) {
     const SlotState& x = s.m.slots[i];
@@ -40,7 +42,8 @@ static void handleSerial() {
     if (line == "status" || line == "s") printStatus();
     else if (line == "mute") signals::mute(true);
     else if (line == "unmute") signals::mute(false);
-    else if (line.length()) Serial.println("Befehle: status | mute | unmute");
+    else if (line == "wake") wake::start();
+    else if (line.length()) Serial.println("Befehle: status | mute | unmute | wake");
     line = "";
   }
 }
@@ -50,6 +53,7 @@ void setup() {
   board::begin();
   sensors::begin();
   signals::begin();
+  wake::begin();
   current = &signals::update(sensors::get());
   netlink::begin();
   Serial.printf("Ladekoffer-Controller %s bereit.\n", FW_VERSION);
@@ -60,5 +64,8 @@ void loop() {
   sensors::update();
   current = &signals::update(sensors::get());
   netlink::publish(*current);
+  wake::Config wakeCfg;
+  if (netlink::takeWakeConfig(wakeCfg)) wake::configure(wakeCfg);
+  wake::update();
   handleSerial();
 }

@@ -21,7 +21,7 @@
 
 // Versionsschema: MAJOR.MINOR.PATCH (siehe README). Bei jeder Aenderung erhoehen.
 #define FW_VERSION_MAJOR 0
-#define FW_VERSION_MINOR 1
+#define FW_VERSION_MINOR 2
 #define FW_VERSION_PATCH 0
 #define FW_STR_(x) #x
 #define FW_STR(x) FW_STR_(x)
@@ -83,6 +83,19 @@ static constexpr uint32_t MCP_RETRY_MS = 2000;
 static constexpr uint32_t BLINK_MS = 500;
 static constexpr uint32_t DEBOUNCE_MS = 40;
 static constexpr bool BTN_ACTIVE_LOW = true;
+// Taster lange halten: Taster aufwecken; kurzer Druck quittiert den Alarm
+static constexpr uint32_t LONG_PRESS_MS = 1500;
+
+// ---- Aufwecken der Taster ueber die Magnet-Trigger (MCP23017 U5) ----
+struct Wake {
+  static constexpr uint8_t MCP_ADDR = 0x21;
+  // Aktiv gegen GND: Ausgang LOW = Magnet-Trigger an, im Ruhezustand HIGH
+  static constexpr bool ACTIVE_LOW = true;
+  // Vorgaben bis der Pi die Werte schickt (Einstellungen im Dashboard): Pin je Slot 1..10
+  static constexpr uint8_t DEFAULT_PINS[SLOT_COUNT] = {8, 9, 10, 11, 12, 13, 14, 15, 0, 1};
+  static constexpr uint16_t DEFAULT_PULSE_MS = 3000;
+  static constexpr uint16_t DEFAULT_GAP_MS = 1000;
+};
 
 // ---- Netz (Koffer-WLAN, Koffer-Pi) ----
 struct Net {
@@ -92,7 +105,7 @@ struct Net {
   static constexpr uint16_t PI_PORT = 1999;
   static constexpr const char* API_KEY = SECRET_API_KEY;
   static constexpr uint32_t HTTP_TIMEOUT_MS = 1500;
-  static constexpr uint32_t WIFI_RETRY_MS = 5000;
+  static constexpr uint32_t WIFI_RETRY_MS = 15000;
   // Der Pi wertet den Koffer als offline, wenn laenger nichts kommt (dort 30 s)
   static constexpr uint32_t SEND_INTERVAL_MS = 5000;
   // Aenderungen werden frueher gesendet, aber nie dichter als dieser Abstand

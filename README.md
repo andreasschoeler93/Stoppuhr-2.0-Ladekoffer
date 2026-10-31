@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.1.0)
+# Ladekoffer-Controller (v0.2.0)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -14,7 +14,16 @@ Versionsverlauf: [CHANGELOG.md](CHANGELOG.md). Verdrahtung: [docs/wiring.md](doc
 - AHT20: Temperatur und Feuchte
 - Ampel (Rot/Gelb/Grün) direkt am ESP, Taster `TRIG_ALL` quittiert den Alarm
 
-Nicht benutzt: der zweite MCP23017 `U5` (0x21), der über `MAG_TRIG` die Magnetkontakte der Slots schaltet.
+Der U5 (0x21) schaltet über `MAG_TRIG` die Magnetkontakte der Slots und weckt damit die Taster (siehe „Taster aufwecken“).
+
+## Taster aufwecken
+
+Den Quittiertaster `TRIG_ALL` mindestens 1,5 s halten (Kurzdruck quittiert weiter den Pieper). Dann werden die Magnet-Trigger
+von Slot 1 bis 10 nacheinander gegen GND gezogen: je 3 s lang, der nächste startet 1 s nach dem vorherigen
+(die Impulse überlappen). Im Ruhezustand liegen die Ausgänge auf HIGH. Auch per seriellem Befehl `wake`.
+Pin je Slot, Impulslänge und Abstand stellt man im Pi-Dashboard unter Einstellungen ein; der Koffer erhält sie in der Antwort
+auf `POST /api/charger` (`{"ok":true,"wake":{"pins":[..10 Werte..],"ms":3000,"gap_ms":1000}}`). Vorgabe bis dahin:
+`8,9,10,11,12,13,14,15,0,1` (0–7 = GPA0–7, 8–15 = GPB0–7); bitte mit dem Schaltplan abgleichen.
 
 ## Ampel und Pieper
 
@@ -38,7 +47,8 @@ pio device monitor -b 115200
 ### Zugangsdaten (`src/secrets.h`)
 
 `src/secrets.example.h` nach `src/secrets.h` kopieren (wird nicht hochgeladen) und eintragen:
-`SECRET_WIFI_SSID`/`SECRET_WIFI_PASS` (Koffer-WLAN, der Zugangspunkt des Koffer-Pi, versteckt – SSID exakt),
+`SECRET_WIFI_SSID`/`SECRET_WIFI_PASS` (Koffer-WLAN, der Zugangspunkt des Koffer-Pi, versteckt – SSID exakt;
+der Controller verbindet sich ausschließlich mit diesem WLAN),
 `SECRET_PI_IP` (Standard `192.168.50.10`, die gemeinsame Adresse der Pis), optional `SECRET_API_KEY`.
 
 ## Versionierung

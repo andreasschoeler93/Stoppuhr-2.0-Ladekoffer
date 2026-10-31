@@ -15,4 +15,6 @@ ADC-Eingang schwebt oder Einschwingzeit zu kurz: Teiler und `C-DIV` prüfen. Bei
 
 ## Kein Kontakt zum Pi
 `status` zeigt WLAN und den letzten HTTP-Code (`200` = angekommen, `<=0` = Netzwerkfehler).
-SSID exakt prüfen (das WLAN ist versteckt) und die Adresse `SECRET_PI_IP` (gemeinsame Adresse `192.168.50.10`).
+Die Firmware gibt im seriellen Monitor Verbindungsversuche und den WLAN-Statuscode aus. SSID exakt prüfen
+(das WLAN ist versteckt), sicherstellen, dass der Zugangspunkt 2,4 GHz anbietet, und die Adresse
+`SECRET_PI_IP` (gemeinsame Adresse `192.168.50.10`) kontrollieren.

@@ -28,4 +28,4 @@ CHRG ist Open-Drain, aktiv LOW (lädt). Es unterscheidet nicht „voll“ von �
 
 ## Taster TRIG_ALL
 
-`INPUT_PULLUP`, Taster gegen GND. Kurzer Druck quittiert den Pieper (nur bei aktivem Fehler).
+`INPUT_PULLUP`, Taster gegen GND. Kurzer Druck quittiert den Pieper (nur bei aktivem Fehler); Halten ab 1,5 s weckt die Taster (siehe README).

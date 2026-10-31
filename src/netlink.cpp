@@ -1,6 +1,7 @@
 #include "netlink.h"
 
 #include <HTTPClient.h>
+#include <Update.h>
 #include <WiFi.h>
 
 namespace netlink {
@@ -123,6 +124,66 @@ bool parseBeep(const String& body, remotebeep::Config& out) {
   return true;
 }
 
+// Kennung in der Firmware-Datei: daran liest der Pi die Version der hochgeladenen Datei
+extern const char kFwMarker[] __attribute__((used));
+const char kFwMarker[] __attribute__((used)) = "KOFFER-FW:" FW_VERSION;
+// Der volatile-Zeiger, der beim Start gelesen wird, haelt die Kennung gegen den Linker im Image
+const char* volatile kFwMarkerRef = kFwMarker;
+
+struct OtaOffer {
+  char version[16];
+  char md5[40];
+  uint32_t size;
+};
+
+String jsonString(const String& body, const char* key, int from) {
+  int k = body.indexOf(key, from);
+  if (k < 0) return "";
+  int q1 = body.indexOf('"', body.indexOf(':', k) + 1);
+  if (q1 < 0) return "";
+  int q2 = body.indexOf('"', q1 + 1);
+  return q2 < 0 ? String("") : body.substring(q1 + 1, q2);
+}
+
+// Liest "ota":{"md5":"..","size":N,"version":".."}; false = kein Update angeboten
+bool parseOta(const String& body, OtaOffer& out) {
+  int o = body.indexOf("\"ota\"");
+  if (o < 0) return false;
+  String v = jsonString(body, "\"version\"", o), m = jsonString(body, "\"md5\"", o);
+  long sz = numAfter(body, "\"size\"", o, 0);
+  if (!v.length() || m.length() != 32 || sz < 100000 || sz > 1310720) return false;
+  if (v == FW_VERSION) return false;
+  strlcpy(out.version, v.c_str(), sizeof(out.version));
+  strlcpy(out.md5, m.c_str(), sizeof(out.md5));
+  out.size = (uint32_t)sz;
+  return true;
+}
+
+// Laedt die Firmware vom Pi und startet neu. Kehrt nur bei einem Fehler zurueck.
+bool runOta(const OtaOffer& o) {
+  Serial.printf("Update auf %s (%lu Bytes) ...\n", o.version, (unsigned long)o.size);
+  String url = String("http://") + cfg::Net::PI_HOST + ":" + cfg::Net::PI_PORT + "/api/charger/firmware";
+  HTTPClient http;
+  http.setConnectTimeout(cfg::Net::HTTP_TIMEOUT_MS);
+  http.setTimeout(15000);
+  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+  if (!http.begin(url)) return false;
+  if (cfg::Net::API_KEY[0]) http.addHeader("X-Api-Key", cfg::Net::API_KEY);
+  bool ok = false;
+  if (http.GET() == 200 && (uint32_t)http.getSize() == o.size && Update.begin(o.size)) {
+    Update.setMD5(o.md5);
+    ok = Update.writeStream(*http.getStreamPtr()) == o.size && Update.end(true);
+    if (!ok) {
+      Serial.printf("Update fehlgeschlagen: %s\n", Update.errorString());
+      Update.abort();
+    }
+  } else {
+    Serial.println("Update: Download nicht moeglich");
+  }
+  http.end();
+  return ok;
+}
+
 int post(const Status& s) {
   static char body[1400];
   if (buildBody(s, body, sizeof(body)) >= sizeof(body)) return -1;
@@ -135,8 +196,10 @@ int post(const Status& s) {
   http.addHeader("Content-Type", "application/json");
   if (cfg::Net::API_KEY[0]) http.addHeader("X-Api-Key", cfg::Net::API_KEY);
   int code = http.POST((uint8_t*)body, strlen(body));
+  OtaOffer offer = {"", "", 0};
   if (code == 200) {
     const String reply = http.getString();
+    if (!parseOta(reply, offer)) offer.size = 0;
     wake::Config w;
     remotebeep::Config bp;
     const bool haveWake = parseWake(reply, w);
@@ -154,6 +217,18 @@ int post(const Status& s) {
     }
   }
   http.end();
+  if (offer.size) {
+    static uint32_t lastFailMs = 0;
+    // Nach einem Fehlschlag 5 Minuten warten, damit der Koffer nicht dauernd laedt
+    if (lastFailMs == 0 || millis() - lastFailMs > 300000) {
+      if (runOta(offer)) {
+        Serial.println("Update fertig, Neustart");
+        delay(300);
+        ESP.restart();
+      }
+      lastFailMs = millis();
+    }
+  }
   return code;
 }
 
@@ -226,7 +301,8 @@ void begin() {
     Serial.printf("WLAN getrennt, Grund %d\n", (int)info.wifi_sta_disconnected.reason);
   }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
   deviceMac = WiFi.macAddress();
-  xTaskCreate(netTask, "netlink", 8192, nullptr, 1, nullptr);
+  Serial.printf("Firmware %s\n", kFwMarkerRef + 10);
+  xTaskCreate(netTask, "netlink", 10240, nullptr, 1, nullptr);
 }
 
 void publish(const Status& s) {

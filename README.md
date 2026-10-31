@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.3.0)
+# Ladekoffer-Controller (v0.4.0)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -50,6 +50,14 @@ pio device monitor -b 115200
 `SECRET_WIFI_SSID`/`SECRET_WIFI_PASS` (Koffer-WLAN, der Zugangspunkt des Koffer-Pi, versteckt – SSID exakt;
 der Controller verbindet sich ausschließlich mit diesem WLAN),
 `SECRET_PI_IP` (Standard `192.168.50.10`, die gemeinsame Adresse der Pis), optional `SECRET_API_KEY`.
+
+## Update per WLAN (OTA)
+
+Ab v0.4.0 aktualisiert sich der Koffer selbst: Im Dashboard unter **Einstellungen → Ladekoffer-Firmware** die Datei
+`.pio/build/seeed_xiao_esp32c3/firmware.bin` hochladen. Der Pi liest die Version aus der Datei (Kennung `KOFFER-FW:vX.Y.Z`)
+und bietet sie in der Antwort auf `POST /api/charger` an. Der Koffer lädt sie von `GET /api/charger/firmware`, prüft die MD5-Summe
+und startet neu. Nach einem Fehler wartet er 5 Minuten bis zum nächsten Versuch. Mit „Bereitstellung beenden“ nimmt man das Angebot zurück.
+Die erste Version mit Update muss einmal per USB geflasht werden.
 
 ## Versionierung
 

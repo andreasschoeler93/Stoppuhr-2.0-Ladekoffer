@@ -2,6 +2,7 @@
 
 | Version | Datum | Änderung |
 | --- | --- | --- |
+| v0.4.0 | 2026-10-31 | Update per WLAN (OTA): Bietet der Pi eine andere Version an (Pi ab v0.19.0, Einstellungen → Ladekoffer-Firmware), lädt der Koffer sie, prüft die MD5-Summe und startet neu. Nach einem Fehlschlag neuer Versuch erst nach 5 Minuten. Die erste Version mit Update muss einmal per USB geflasht werden. |
 | v0.3.0 | 2026-10-31 | Ton für Dashboard-Meldungen über den Pieper des Koffers: gelbe Meldung = kurzer Piepton, rote Meldung = langer Ton im festen Abstand. Vorgaben kommen vom Pi in der Antwort auf `POST /api/charger` (Pi ab v0.18.0); ohne frische Antwort (> 60 s) verstummt der rote Ton. |
 | v0.2.0 | 2026-10-31 | Taster aufwecken: Quittiertaster `TRIG_ALL` lang halten (≥ 1,5 s) steuert die Magnet-Trigger an `U5` (0x21) der Reihe nach von Slot 1 bis 10 an (aktiv gegen GND, je 3 s, Abstand 1 s). Pins, Impulslänge und Abstand stellt man im Dashboard ein (Pi ab v0.17.0, Übergabe in der Antwort auf `POST /api/charger`). Kurzer Druck quittiert weiter den Pieper. Serieller Befehl `wake`. |
 | v0.1.1 | 2026-10-30 | WLAN: Verbindungsversuche (mit Statuscode), Abbrüche und erfolgreiche Verbindung erscheinen im seriellen Monitor; es wird ausschließlich das Koffer-WLAN verwendet. |

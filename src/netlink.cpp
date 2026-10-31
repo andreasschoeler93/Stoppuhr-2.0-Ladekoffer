@@ -1,6 +1,7 @@
 #include "netlink.h"
 
 #include <HTTPClient.h>
+#include <Preferences.h>
 #include <Update.h>
 #include <WiFi.h>
 
@@ -13,6 +14,32 @@ bool haveStatus = false;
 uint32_t signature = 0;
 volatile int httpCode = 0;
 String deviceMac;
+
+// Zugangsdaten stehen im Flash (NVS). Eine per USB geflashte Version mit secrets.h schreibt sie dorthin;
+// die fertige Release-Datei von GitHub enthaelt keine und nutzt die gespeicherten Werte.
+String wifiSsid = cfg::Net::WIFI_SSID;
+String wifiPass = cfg::Net::WIFI_PASS;
+String piHost = cfg::Net::PI_HOST;
+String apiKey = cfg::Net::API_KEY;
+
+void loadCredentials() {
+  Preferences p;
+  if (!p.begin("net", false)) return;
+  if (cfg::Net::WIFI_PASS[0]) {
+    p.putString("ssid", cfg::Net::WIFI_SSID);
+    p.putString("pass", cfg::Net::WIFI_PASS);
+    p.putString("pi", cfg::Net::PI_HOST);
+    p.putString("key", cfg::Net::API_KEY);
+  } else if (p.isKey("ssid")) {
+    wifiSsid = p.getString("ssid", wifiSsid);
+    wifiPass = p.getString("pass", wifiPass);
+    piHost = p.getString("pi", piHost);
+    apiKey = p.getString("key", apiKey);
+  } else {
+    Serial.println("Keine WLAN-Daten gespeichert: einmal per USB mit src/secrets.h flashen");
+  }
+  p.end();
+}
 
 const char* lightName(Light l) {
   switch (l) {
@@ -162,13 +189,13 @@ bool parseOta(const String& body, OtaOffer& out) {
 // Laedt die Firmware vom Pi und startet neu. Kehrt nur bei einem Fehler zurueck.
 bool runOta(const OtaOffer& o) {
   Serial.printf("Update auf %s (%lu Bytes) ...\n", o.version, (unsigned long)o.size);
-  String url = String("http://") + cfg::Net::PI_HOST + ":" + cfg::Net::PI_PORT + "/api/charger/firmware";
+  String url = String("http://") + piHost + ":" + cfg::Net::PI_PORT + "/api/charger/firmware";
   HTTPClient http;
   http.setConnectTimeout(cfg::Net::HTTP_TIMEOUT_MS);
   http.setTimeout(15000);
   http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
   if (!http.begin(url)) return false;
-  if (cfg::Net::API_KEY[0]) http.addHeader("X-Api-Key", cfg::Net::API_KEY);
+  if (apiKey.length()) http.addHeader("X-Api-Key", apiKey);
   bool ok = false;
   if (http.GET() == 200 && (uint32_t)http.getSize() == o.size && Update.begin(o.size)) {
     Update.setMD5(o.md5);
@@ -187,14 +214,14 @@ bool runOta(const OtaOffer& o) {
 int post(const Status& s) {
   static char body[1400];
   if (buildBody(s, body, sizeof(body)) >= sizeof(body)) return -1;
-  String url = String("http://") + cfg::Net::PI_HOST + ":" + cfg::Net::PI_PORT + "/api/charger";
+  String url = String("http://") + piHost + ":" + cfg::Net::PI_PORT + "/api/charger";
   HTTPClient http;
   http.setConnectTimeout(cfg::Net::HTTP_TIMEOUT_MS);
   http.setTimeout(cfg::Net::HTTP_TIMEOUT_MS);
   http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
   if (!http.begin(url)) return -1;
   http.addHeader("Content-Type", "application/json");
-  if (cfg::Net::API_KEY[0]) http.addHeader("X-Api-Key", cfg::Net::API_KEY);
+  if (apiKey.length()) http.addHeader("X-Api-Key", apiKey);
   int code = http.POST((uint8_t*)body, strlen(body));
   OtaOffer offer = {"", "", 0};
   if (code == 200) {
@@ -247,11 +274,11 @@ void netTask(void*) {
       }
       if (now - lastTryMs >= cfg::Net::WIFI_RETRY_MS || lastTryMs == 0) {
         // Der Statuscode vor dem Neustart zeigt, woran der letzte Versuch scheiterte
-        Serial.printf("WLAN: Verbindungsversuch zu \"%s\" (vorheriger Statuscode %d)\n", cfg::Net::WIFI_SSID,
+        Serial.printf("WLAN: Verbindungsversuch zu \"%s\" (vorheriger Statuscode %d)\n", wifiSsid.c_str(),
                       (int)WiFi.status());
         lastTryMs = now;
         WiFi.disconnect();
-        WiFi.begin(cfg::Net::WIFI_SSID, cfg::Net::WIFI_PASS);
+        WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
       }
       vTaskDelay(pdMS_TO_TICKS(200));
       continue;
@@ -300,6 +327,7 @@ void begin() {
   WiFi.onEvent([](arduino_event_id_t, arduino_event_info_t info) {
     Serial.printf("WLAN getrennt, Grund %d\n", (int)info.wifi_sta_disconnected.reason);
   }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+  loadCredentials();
   deviceMac = WiFi.macAddress();
   Serial.printf("Firmware %s\n", kFwMarkerRef + 10);
   xTaskCreate(netTask, "netlink", 10240, nullptr, 1, nullptr);

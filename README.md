@@ -16,6 +16,11 @@ Versionsverlauf: [CHANGELOG.md](CHANGELOG.md). Verdrahtung: [docs/wiring.md](doc
 
 Der U5 (0x21) schaltet über `MAG_TRIG` die Magnetkontakte der Slots und weckt damit die Taster (siehe „Taster aufwecken“).
 
+## Hardware-Unterlagen
+
+- [Interaktiven Bestückungsplan (iBOM) öffnen](https://andreasschoeler93.github.io/Stoppuhr-2.0-Ladekoffer/ibom.html)
+- [Bestellliste herunterladen](docs/Stoppuhr_2_0_Ladeplatine_Bestellliste.xlsx)
+
 ## Taster aufwecken
 
 Den Quittiertaster `TRIG_ALL` mindestens 1,5 s halten (Kurzdruck quittiert weiter den Pieper). Dann werden die Magnet-Trigger

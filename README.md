@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.5.0)
+# Ladekoffer-Controller (v0.6.0)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -29,6 +29,11 @@ von Slot 1 bis 10 nacheinander gegen GND gezogen: je 3 s lang, der nächste star
 Pin je Slot, Impulslänge und Abstand stellt man im Pi-Dashboard unter Einstellungen ein; der Koffer erhält sie in der Antwort
 auf `POST /api/charger` (`{"ok":true,"wake":{"pins":[..10 Werte..],"ms":3000,"gap_ms":1000}}`). Vorgabe bis dahin:
 `8,9,10,11,12,13,14,15,0,1` (0–7 = GPA0–7, 8–15 = GPB0–7); bitte mit dem Schaltplan abgleichen.
+
+Im Pi-Dashboard kann zusätzlich ein einzelner belegter Ladeplatz geweckt werden. Der Pi sendet
+`"manual_wake":{"id":"<32 Hex-Zeichen>","slot":1}` in der Antwort; der Koffer pulst nur den Pin dieses Slots
+für die eingestellte Impulslänge und bestätigt den Abschluss beim nächsten `POST /api/charger` mit `"wake_ack":"<id>"`.
+`wake_active` im Status verhindert, dass ein Einzelbefehl während einer laufenden Wecksequenz angenommen wird.
 
 ## Ampel und Pieper
 
@@ -95,12 +100,14 @@ von Slot-Zustand, Ampel, Alarm oder Quittierung. Der Pi bewertet den Koffer als 
 ```json
 {"mac":"AA:BB:..","fw":"v0.1.0","uptime_s":120,"rssi":-55,
  "temp":24.5,"humidity":40,"aht_ok":true,"temp_alarm":false,"i2c_ok":true,
- "light":"green","fault":false,"muted":false,
+ "light":"green","fault":false,"muted":false,"wake_active":false,
  "present":10,"charging":0,"full":10,
  "slots":[{"n":1,"present":true,"charging":false,"full":true,"fault":false,"vbat":4.12}]}
 ```
 
 `light`: `off`, `green`, `yellow`, `yellow_blink`, `red`, `red_blink`. Die Zeit stempelt der Pi selbst.
+Ein optionales `wake_ack`-Feld bestätigt einen ausgeführten Einzel-Weckimpuls; die Pi-Antwort enthält bis zur Bestätigung
+`manual_wake` (oder `null`) sowie die konfigurierten Wake-Pins und Impulszeiten.
 
 ## Kalibrierung
 

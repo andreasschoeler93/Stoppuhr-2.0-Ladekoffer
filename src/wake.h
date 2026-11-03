@@ -20,7 +20,10 @@ void configure(const Config& c);
 void begin();
 // Startet die Sequenz (ignoriert, solange eine laeuft)
 void start();
+// Weckt einen einzelnen 1-basierten Slot mit derselben Pin- und Impuls-Konfiguration.
+bool startSlot(uint8_t slot, const String& requestId);
 bool active();
+String takeCompletedRequestId();
 // Nicht blockierend im loop() aufrufen
 void update();
 

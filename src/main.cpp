@@ -60,14 +60,29 @@ void setup() {
 }
 
 void loop() {
+  static uint32_t manualWakeRetryAtMs = 0;
   board::service();
   sensors::update();
   current = &signals::update(sensors::get());
-  netlink::publish(*current);
   wake::Config wakeCfg;
   if (netlink::takeWakeConfig(wakeCfg)) wake::configure(wakeCfg);
   remotebeep::Config beepCfg;
   if (netlink::takeBeepConfig(beepCfg)) remotebeep::configure(beepCfg);
+  if (!wake::active() && millis() >= manualWakeRetryAtMs) {
+    String requestId;
+    uint8_t slot = 0;
+    if (netlink::takeManualWakeRequest(requestId, slot)) {
+      if (wake::startSlot(slot, requestId)) {
+        manualWakeRetryAtMs = 0;
+      } else {
+        netlink::retryManualWakeRequest(requestId, slot);
+        manualWakeRetryAtMs = millis() + cfg::MCP_RETRY_MS;
+      }
+    }
+  }
   wake::update();
+  const String completedWakeId = wake::takeCompletedRequestId();
+  if (completedWakeId.length()) netlink::acknowledgeManualWake(completedWakeId);
+  netlink::publish(*current, wake::active());
   handleSerial();
 }

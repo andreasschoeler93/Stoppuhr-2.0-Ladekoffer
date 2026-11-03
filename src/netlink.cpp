@@ -1,5 +1,6 @@
 #include "netlink.h"
 
+#include <ctype.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
 #include <Update.h>
@@ -12,8 +13,17 @@ SemaphoreHandle_t mutex = nullptr;
 Status shared;
 bool haveStatus = false;
 uint32_t signature = 0;
+bool sharedWakeActive = false;
 volatile int httpCode = 0;
 String deviceMac;
+struct ManualWake {
+  char id[33] = {};
+  uint8_t slot = 0;
+};
+ManualWake pendingManualWake;
+bool manualWakePending = false;
+String lastManualWakeId;
+String wakeAck;
 
 // Zugangsdaten stehen im Flash (NVS). Eine per USB geflashte Version mit secrets.h schreibt sie dorthin;
 // die fertige Release-Datei von GitHub enthaelt keine und nutzt die gespeicherten Werte.
@@ -53,10 +63,13 @@ const char* lightName(Light l) {
 }
 
 // Fasst alles zusammen, was eine sofortige Meldung rechtfertigt (ohne Messwerte wie vbat)
-uint32_t makeSignature(const Status& s) {
+uint32_t makeSignature(const Status& s, bool wakeActive) {
   uint32_t h = (uint32_t)s.light;
   h = h * 31 + s.muted + 2 * s.m.tempAlarm + 4 * s.m.ahtOk + 8 * s.m.i2cOk;
-  for (const SlotState& x : s.m.slots) h = h * 31 + (x.present | (x.charging << 1) | (x.full << 2) | (x.fault << 3));
+  h = h * 31 + wakeActive;
+  for (const SlotState& x : s.m.slots) {
+    h = h * 31 + (x.present | (x.charging << 1) | (x.full << 2) | (x.fault << 3));
+  }
   return h;
 }
 
@@ -66,8 +79,13 @@ void appendNum(char* out, size_t n, float v, int dec) {
 }
 
 // Feldnamen siehe README (Schnittstelle zum Pi)
-size_t buildBody(const Status& s, char* buf, size_t cap) {
+size_t buildBody(const Status& s, bool wakeActive, char* buf, size_t cap) {
   char t[16], h[16];
+  String ack;
+  if (mutex && xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+    ack = wakeAck;
+    xSemaphoreGive(mutex);
+  }
   appendNum(t, sizeof(t), s.m.tempC, 1);
   appendNum(h, sizeof(h), s.m.humidity, 0);
   uint8_t present = 0, charging = 0, full = 0;
@@ -91,7 +109,11 @@ size_t buildBody(const Status& s, char* buf, size_t cap) {
                   i ? "," : "", i + 1, x.present ? "true" : "false", x.charging ? "true" : "false",
                   x.full ? "true" : "false", x.fault ? "true" : "false", x.vbat);
   }
-  if (n < cap) n += snprintf(buf + n, cap - n, "]}");
+  if (n < cap) {
+    n += snprintf(buf + n, cap - n, "],\"wake_active\":%s", wakeActive ? "true" : "false");
+  }
+  if (ack.length() && n < cap) n += snprintf(buf + n, cap - n, ",\"wake_ack\":\"%s\"", ack.c_str());
+  if (n < cap) n += snprintf(buf + n, cap - n, "}");
   return n;
 }
 
@@ -172,6 +194,29 @@ String jsonString(const String& body, const char* key, int from) {
   return q2 < 0 ? String("") : body.substring(q1 + 1, q2);
 }
 
+bool parseManualWake(const String& body, ManualWake& out, bool& fieldPresent) {
+  const int w = body.indexOf("\"manual_wake\"");
+  if (w < 0) {
+    fieldPresent = false;
+    return false;
+  }
+  fieldPresent = true;
+  const int open = body.indexOf('{', w);
+  if (open < 0) return false;
+  const int close = body.indexOf('}', open);
+  if (close < 0) return false;
+  const String item = body.substring(open, close + 1);
+  const String id = jsonString(item, "\"id\"", 0);
+  const long slot = numAfter(item, "\"slot\"", 0, 0);
+  if (id.length() != 32 || slot < 1 || slot > cfg::SLOT_COUNT) return false;
+  for (unsigned int i = 0; i < id.length(); i++) {
+    if (!isxdigit((unsigned char)id[i])) return false;
+  }
+  strlcpy(out.id, id.c_str(), sizeof(out.id));
+  out.slot = (uint8_t)slot;
+  return true;
+}
+
 // Liest "ota":{"md5":"..","size":N,"version":".."}; false = kein Update angeboten
 bool parseOta(const String& body, OtaOffer& out) {
   int o = body.indexOf("\"ota\"");
@@ -211,9 +256,9 @@ bool runOta(const OtaOffer& o) {
   return ok;
 }
 
-int post(const Status& s) {
+int post(const Status& s, bool wakeActive) {
   static char body[1400];
-  if (buildBody(s, body, sizeof(body)) >= sizeof(body)) return -1;
+  if (buildBody(s, wakeActive, body, sizeof(body)) >= sizeof(body)) return -1;
   String url = String("http://") + piHost + ":" + cfg::Net::PI_PORT + "/api/charger";
   HTTPClient http;
   http.setConnectTimeout(cfg::Net::HTTP_TIMEOUT_MS);
@@ -229,9 +274,14 @@ int post(const Status& s) {
     if (!parseOta(reply, offer)) offer.size = 0;
     wake::Config w;
     remotebeep::Config bp;
+    ManualWake manual = {};
+    bool manualFieldPresent = false;
+    const bool haveManual = parseManualWake(reply, manual, manualFieldPresent);
+    const String confirmedWakeAck = jsonString(reply, "\"wake_ack\"", 0);
     const bool haveWake = parseWake(reply, w);
     const bool haveBeep = parseBeep(reply, bp);
-    if ((haveWake || haveBeep) && xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+    if ((haveWake || haveBeep || manualFieldPresent || confirmedWakeAck.length()) &&
+        xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
       if (haveWake) {
         pendingWake = w;
         wakePending = true;
@@ -239,6 +289,21 @@ int post(const Status& s) {
       if (haveBeep) {
         pendingBeep = bp;
         beepPending = true;
+      }
+      if (haveManual && lastManualWakeId != manual.id) {
+        pendingManualWake = manual;
+        manualWakePending = true;
+        lastManualWakeId = manual.id;
+      } else if (manualFieldPresent && !haveManual && !confirmedWakeAck.length()) {
+        pendingManualWake = {};
+        manualWakePending = false;
+        lastManualWakeId = "";
+      }
+      if (confirmedWakeAck.length() && confirmedWakeAck == lastManualWakeId) {
+        pendingManualWake = {};
+        manualWakePending = false;
+        lastManualWakeId = "";
+        if (wakeAck == confirmedWakeAck) wakeAck = "";
       }
       xSemaphoreGive(mutex);
     }
@@ -291,10 +356,12 @@ void netTask(void*) {
 
     Status copy;
     uint32_t sig = 0;
+    bool wakeActive = false;
     bool have = false;
     if (xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
       copy = shared;
       sig = signature;
+      wakeActive = sharedWakeActive;
       have = haveStatus;
       xSemaphoreGive(mutex);
     }
@@ -303,7 +370,7 @@ void netTask(void*) {
     const bool due = !sentOnce || since >= cfg::Net::SEND_INTERVAL_MS ||
                      (changed && since >= cfg::Net::MIN_GAP_MS);
     if (have && due) {
-      int code = post(copy);
+      int code = post(copy, wakeActive);
       httpCode = code;
       lastSendMs = millis();
       // Auch bei Fehlschlag erst nach dem normalen Abstand wiederholen (Pi nicht ueberlasten)
@@ -333,14 +400,15 @@ void begin() {
   xTaskCreate(netTask, "netlink", 10240, nullptr, 1, nullptr);
 }
 
-void publish(const Status& s) {
+void publish(const Status& s, bool wakeActive) {
   static uint32_t lastMs = 0;
   uint32_t now = millis();
   if (!mutex || now - lastMs < 100) return;
   if (xSemaphoreTake(mutex, 0) != pdTRUE) return;  // nie warten, der naechste Durchlauf folgt
   lastMs = now;
   shared = s;
-  signature = makeSignature(s);
+  signature = makeSignature(s, wakeActive);
+  sharedWakeActive = wakeActive;
   haveStatus = true;
   xSemaphoreGive(mutex);
 }
@@ -354,6 +422,34 @@ bool takeWakeConfig(wake::Config& out) {
   }
   xSemaphoreGive(mutex);
   return have;
+}
+
+bool takeManualWakeRequest(String& id, uint8_t& slot) {
+  if (!mutex || xSemaphoreTake(mutex, 0) != pdTRUE) return false;
+  const bool have = manualWakePending;
+  if (have) {
+    id = pendingManualWake.id;
+    slot = pendingManualWake.slot;
+    pendingManualWake = {};
+    manualWakePending = false;
+  }
+  xSemaphoreGive(mutex);
+  return have;
+}
+
+void retryManualWakeRequest(const String& id, uint8_t slot) {
+  if (!mutex || xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) != pdTRUE) return;
+  strlcpy(pendingManualWake.id, id.c_str(), sizeof(pendingManualWake.id));
+  pendingManualWake.slot = slot;
+  manualWakePending = true;
+  lastManualWakeId = id;
+  xSemaphoreGive(mutex);
+}
+
+void acknowledgeManualWake(const String& id) {
+  if (!mutex || xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) != pdTRUE) return;
+  wakeAck = id;
+  xSemaphoreGive(mutex);
 }
 
 bool takeBeepConfig(remotebeep::Config& out) {

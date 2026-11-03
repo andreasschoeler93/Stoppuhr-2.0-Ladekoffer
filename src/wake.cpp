@@ -15,6 +15,9 @@ Config run = defaults();
 bool running = false;
 uint32_t startMs = 0;
 bool pinOn[cfg::SLOT_COUNT] = {};
+int8_t onlySlot = -1;
+String requestId;
+String completedRequestId;
 
 void drivePin(uint8_t slot, bool on) {
   if (!mcpUp) return;
@@ -61,12 +64,36 @@ void start() {
     return;
   }
   run = cfgNow;
+  onlySlot = -1;
+  requestId = "";
   startMs = millis();
   running = true;
   Serial.println("Aufwecken: Taster werden der Reihe nach geweckt");
 }
 
+bool startSlot(uint8_t slot, const String& id) {
+  if (running || slot < 1 || slot > cfg::SLOT_COUNT || !id.length()) return false;
+  if (!mcpUp) mcpUp = initMcp();
+  if (!mcpUp) {
+    Serial.println("Einzel-Aufwecken: MCP23017 U5 (0x21) antwortet nicht");
+    return false;
+  }
+  run = cfgNow;
+  onlySlot = slot - 1;
+  requestId = id;
+  startMs = millis();
+  running = true;
+  Serial.printf("Aufwecken: einzelner Taster in Slot %u\n", slot);
+  return true;
+}
+
 bool active() { return running; }
+
+String takeCompletedRequestId() {
+  String id = completedRequestId;
+  completedRequestId = "";
+  return id;
+}
 
 void update() {
   const uint32_t now = millis();
@@ -80,15 +107,25 @@ void update() {
   const uint32_t t = now - startMs;
   for (uint8_t i = 0; i < cfg::SLOT_COUNT; i++) {
     const uint32_t on = (uint32_t)i * run.gapMs;
-    const bool want = t >= on && t < on + run.pulseMs;
+    const bool want = onlySlot >= 0
+      ? i == onlySlot && t < run.pulseMs
+      : t >= on && t < on + run.pulseMs;
     if (want != pinOn[i]) {
       pinOn[i] = want;
       drivePin(i, want);
     }
   }
-  if (t >= (uint32_t)(cfg::SLOT_COUNT - 1) * run.gapMs + run.pulseMs) {
+  const uint32_t duration = onlySlot >= 0
+    ? run.pulseMs
+    : (uint32_t)(cfg::SLOT_COUNT - 1) * run.gapMs + run.pulseMs;
+  if (t >= duration) {
     allOff();
     running = false;
+    onlySlot = -1;
+    if (requestId.length()) {
+      completedRequestId = requestId;
+      requestId = "";
+    }
     Serial.println("Aufwecken: fertig");
   }
 }

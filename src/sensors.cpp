@@ -67,11 +67,18 @@ void updateTemperature(uint32_t now) {
     }
   } else if (now - ahtStartMs >= cfg::AHT_CONVERT_MS) {
     ahtState = Aht::IDLE;
-    if (ahtRead()) ahtLastGoodMs = now;
-    else ahtInitDone = false;
+    if (ahtRead()) {
+      ahtLastGoodMs = now;
+    } else {
+      ahtInitDone = false;
+      DBG("AHT20: Lesen fehlgeschlagen (Busy oder keine Antwort), neuer Versuch in %lu s",
+          (unsigned long)(cfg::TEMP_INTERVAL_MS / 1000));
+    }
   }
 
+  const bool wasOk = data.ahtOk;
   data.ahtOk = ahtLastGoodMs != 0 && (now - ahtLastGoodMs) <= cfg::AHT_VALID_MS;
+  if (wasOk != data.ahtOk) DBG("AHT20: %s", data.ahtOk ? "ok" : "ausgefallen (keine gueltige Messung)");
   data.tempC = data.ahtOk ? lastTemp : NAN;
   data.humidity = data.ahtOk ? lastHum : NAN;
   if (data.ahtOk) {
@@ -81,13 +88,26 @@ void updateTemperature(uint32_t now) {
 }
 
 void scanSlots() {
+  static bool prevCharging[cfg::SLOT_COUNT] = {};
+  static bool seen[cfg::SLOT_COUNT] = {};
+  static uint32_t changedAt[cfg::SLOT_COUNT] = {};
+  const uint32_t now = millis();
   for (uint8_t i = 0; i < cfg::SLOT_COUNT; i++) {
     SlotState& s = data.slots[i];
     s.vbat = board::readVbat(i);
-    s.present = s.vbat >= cfg::VBAT_PRESENT_V;
-    s.charging = s.present && board::readCharging(i);
-    s.full = s.present && !s.charging && s.vbat >= cfg::VBAT_FULL_V;
-    s.fault = s.present && s.vbat > cfg::VBAT_ABS_MAX_V;
+    // Sicher messbar: rote LED des Lademoduls (laedt) und die Spannung am Ausgang
+    s.charging = board::readCharging(i);
+    s.fault = s.vbat > cfg::VBAT_ABS_MAX_V;
+    if (!seen[i]) {
+      seen[i] = true;
+      prevCharging[i] = s.charging;
+    } else if (s.charging != prevCharging[i]) {
+      DBG("Slot %u: laedt=%d Vbat=%.3f V", i + 1, s.charging, s.vbat);
+      prevCharging[i] = s.charging;
+      changedAt[i] = now;
+      s.changed = true;
+    }
+    s.sinceS = s.changed ? (now - changedAt[i]) / 1000 : 0;
   }
 }
 

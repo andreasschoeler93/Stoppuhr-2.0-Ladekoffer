@@ -17,9 +17,15 @@ struct Config {
 Config defaults();
 // Neue Werte vom Pi; wirkt ab dem naechsten Start, ein laufender Ablauf bleibt unveraendert
 void configure(const Config& c);
+// Polaritaet der Trigger-Ausgaenge umschalten und im Flash speichern (gilt auch nach dem Neustart)
+void setActiveLow(bool low);
+// Alle 16 Ausgaenge von U5 gleichzeitig auf aktiv oder Ruhe setzen (bleibt, bis zurueckgesetzt)
+void setAll(bool on);
+// Schaltet U5-Pin 0..15 nacheinander je 3 s ein, um die Zuordnung zu den Slots zu finden
+void startPinTest();
 void begin();
-// Startet die Sequenz (ignoriert, solange eine laeuft)
-void start();
+// Startet die Sequenz (ignoriert, solange eine laeuft); onlySlot 0..9 weckt nur diesen Slot
+void start(int8_t onlySlot = -1);
 // Weckt einen einzelnen 1-basierten Slot mit derselben Pin- und Impuls-Konfiguration.
 bool startSlot(uint8_t slot, const String& requestId);
 bool active();

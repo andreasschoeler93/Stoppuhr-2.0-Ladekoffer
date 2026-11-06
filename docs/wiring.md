@@ -23,8 +23,7 @@ Slot *n* liegt auf Multiplexer-Kanal *n−1* (Slots 1..8 an `U3`, Slots 9 und 10
 
 ## TP4056 STAT (CHRG)
 
-CHRG ist Open-Drain, aktiv LOW (lädt). Es unterscheidet nicht „voll“ von „nicht gesteckt“; deshalb gilt:
-`present` über die Akkuspannung, `full` = vorhanden, lädt nicht und Spannung ≥ `VBAT_FULL_V`.
+STAT ist an der roten LED des TP4056-Moduls angelötet, nicht am CHRG-Pin des Chips. Deshalb ist der Pegel umgekehrt: LED an (lädt) = HIGH, LED aus = LOW (`STAT_ACTIVE_LOW = false`). Er unterscheidet nicht „voll“ von „nicht gesteckt“. Auch die Akkuspannung (VBAT = B+ des Moduls) hilft nicht: Ohne Akku hält der TP4056 den Ausgang bei ca. 4 V. Die Firmware meldet deshalb nur „lädt“ und die Spannung als Messwert.
 
 ## Taster TRIG_ALL
 

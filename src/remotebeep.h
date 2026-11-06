@@ -17,5 +17,8 @@ struct Config {
 void configure(const Config& c);
 // Soll der Pieper wegen einer Dashboard-Meldung jetzt an sein? Regelmaessig aufrufen.
 bool active(uint32_t now);
+// Quittiert: bleibt still, bis eine neue Meldung kommt (neue gelbe Meldung oder rot erneut an)
+void mute();
+bool muted();
 
 }  // namespace remotebeep

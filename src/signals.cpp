@@ -23,30 +23,34 @@ void updateButton(uint32_t now) {
   if (raw != rawLast) {
     rawLast = raw;
     lastChangeMs = now;
+    DBG("TRIG_ALL roh: %s", raw ? "gedrueckt (LOW)" : "losgelassen (HIGH)");
   }
   if (now - lastChangeMs >= cfg::DEBOUNCE_MS) stable = raw;
   if (stable && !stableLast) {
     pressedSinceMs = now;
     longFired = false;
+    DBG("TRIG_ALL entprellt: gedrueckt");
   }
   if (stable && !longFired && now - pressedSinceMs >= cfg::LONG_PRESS_MS) {
     longFired = true;
+    DBG("TRIG_ALL lang gehalten -> Aufwecken");
     wake::start();
   }
-  if (!stable && stableLast && !longFired && st.anyFault) st.muted = true;
+  if (!stable && stableLast) DBG("TRIG_ALL entprellt: losgelassen (lang=%d)", longFired);
+  if (!stable && stableLast && !longFired) {
+    if (st.anyFault) st.muted = true;
+    if (remotebeep::active(now) || st.anyFault) remotebeep::mute();
+    DBG("Quittiert: Pieper stumm bis zur naechsten Meldung");
+  }
   stableLast = stable;
 }
 
 void aggregate(const Measurements& m) {
   st.m = m;
   st.anyCharging = false;
-  st.allPresent = true;
-  st.allFull = true;
   bool slotFault = false;
   for (const SlotState& s : m.slots) {
     st.anyCharging |= s.charging;
-    st.allPresent &= s.present;
-    st.allFull &= s.full;
     slotFault |= s.fault;
   }
   st.sensorFault = !m.ahtOk;
@@ -54,6 +58,12 @@ void aggregate(const Measurements& m) {
   st.hardFault = m.tempAlarm || slotFault || !m.i2cOk;
   st.anyFault = st.sensorFault || st.hardFault;
 
+  static bool pT = false, pS = false, pI = false, pA = false, pM = false;
+  if (m.tempAlarm != pT || slotFault != pS || m.i2cOk != pI || m.ahtOk != pA || st.muted != pM) {
+    DBG("Fehler: Temp-Alarm=%d Slot-Ueberspannung=%d I2C-Ausfall=%d AHT-ok=%d quittiert=%d", m.tempAlarm, slotFault,
+        !m.i2cOk, m.ahtOk, st.muted);
+    pT = m.tempAlarm; pS = slotFault; pI = m.i2cOk; pA = m.ahtOk; pM = st.muted;
+  }
   if (!st.anyFault) st.muted = false;
   if (st.anyFault && !lastAnyFault) st.muted = false;  // neuer Fehler -> Ton wieder aktiv
   lastAnyFault = st.anyFault;
@@ -69,9 +79,9 @@ void drive(uint32_t now) {
     st.light = Light::RED_BLINK;
     board::setLeds(blink, false, false);
   } else if (st.anyCharging) {
-    st.light = st.allPresent ? Light::YELLOW : Light::YELLOW_BLINK;
-    board::setLeds(false, st.allPresent ? true : blink, false);
-  } else if (st.allPresent && st.allFull) {
+    st.light = Light::YELLOW;
+    board::setLeds(false, true, false);
+  } else if (st.m.i2cOk) {
     st.light = Light::GREEN;
     board::setLeds(false, false, true);
   } else {

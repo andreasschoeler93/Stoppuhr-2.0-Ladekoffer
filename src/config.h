@@ -21,8 +21,8 @@
 
 // Versionsschema: MAJOR.MINOR.PATCH (siehe README). Bei jeder Aenderung erhoehen.
 #define FW_VERSION_MAJOR 0
-#define FW_VERSION_MINOR 6
-#define FW_VERSION_PATCH 0
+#define FW_VERSION_MINOR 7
+#define FW_VERSION_PATCH 16
 #define FW_STR_(x) #x
 #define FW_STR(x) FW_STR_(x)
 #define FW_VERSION "v" FW_STR(FW_VERSION_MAJOR) "." FW_STR(FW_VERSION_MINOR) "." FW_STR(FW_VERSION_PATCH)
@@ -63,11 +63,10 @@ struct Mcp {
 static constexpr uint8_t AHT_ADDR = 0x38;
 
 // ---- Messung ----
-static constexpr bool STAT_ACTIVE_LOW = true;
+// STAT ist an der roten LED des TP4056-Moduls angelötet: LED an (laedt) = HIGH, LED aus = LOW
+static constexpr bool STAT_ACTIVE_LOW = false;
 // Spannungsteiler je Slot: 200 kOhm oben, 100 kOhm unten -> Vbat = Vadc * 3
 static constexpr float VBAT_DIV_RATIO = 3.0f;
-static constexpr float VBAT_PRESENT_V = 2.0f;
-static constexpr float VBAT_FULL_V = 4.10f;
 static constexpr float VBAT_ABS_MAX_V = 4.30f;
 static constexpr uint8_t ADC_SAMPLES = 4;
 
@@ -76,9 +75,9 @@ static constexpr float TEMP_ALARM_OFF_C = 57.0f;
 
 // ---- Zeiten ----
 static constexpr uint32_t SCAN_SLOTS_MS = 250;
-static constexpr uint32_t TEMP_INTERVAL_MS = 1000;
+static constexpr uint32_t TEMP_INTERVAL_MS = 10000;
 static constexpr uint32_t AHT_CONVERT_MS = 90;  // Messdauer des AHT20 (mind. 80 ms)
-static constexpr uint32_t AHT_VALID_MS = 5000;  // danach gilt der Sensor als ausgefallen
+static constexpr uint32_t AHT_VALID_MS = 90000;  // danach gilt der Sensor als ausgefallen
 static constexpr uint32_t MCP_RETRY_MS = 2000;
 static constexpr uint32_t BLINK_MS = 500;
 static constexpr uint32_t DEBOUNCE_MS = 40;
@@ -89,10 +88,10 @@ static constexpr uint32_t LONG_PRESS_MS = 1500;
 // ---- Aufwecken der Taster ueber die Magnet-Trigger (MCP23017 U5) ----
 struct Wake {
   static constexpr uint8_t MCP_ADDR = 0x21;
-  // Aktiv gegen GND: Ausgang LOW = Magnet-Trigger an, im Ruhezustand HIGH
-  static constexpr bool ACTIVE_LOW = true;
-  // Vorgaben bis der Pi die Werte schickt (Einstellungen im Dashboard): Pin je Slot 1..10
-  static constexpr uint8_t DEFAULT_PINS[SLOT_COUNT] = {8, 9, 10, 11, 12, 13, 14, 15, 0, 1};
+  // Ausgang HIGH = Gate des 2N7000 an, MAG_TRIG gegen GND = Trigger an; im Ruhezustand LOW
+  static constexpr bool ACTIVE_LOW = false;
+  // Fest verdrahtet (Schaltplan V3, Start_A..J an U5): Slot 1..10 -> GPB3, GPA4, GPB4, GPA3, GPB5, GPA2, GPB6, GPA1, GPB7, GPA0
+  static constexpr uint8_t DEFAULT_PINS[SLOT_COUNT] = {11, 4, 12, 3, 13, 2, 14, 1, 15, 0};
   static constexpr uint16_t DEFAULT_PULSE_MS = 3000;
   static constexpr uint16_t DEFAULT_GAP_MS = 1000;
 };

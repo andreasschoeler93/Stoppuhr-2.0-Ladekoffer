@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.6.0)
+# Ladekoffer-Controller (v0.7.16)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -24,11 +24,12 @@ Der U5 (0x21) schaltet über `MAG_TRIG` die Magnetkontakte der Slots und weckt d
 ## Taster aufwecken
 
 Den Quittiertaster `TRIG_ALL` mindestens 1,5 s halten (Kurzdruck quittiert weiter den Pieper). Dann werden die Magnet-Trigger
-von Slot 1 bis 10 nacheinander gegen GND gezogen: je 3 s lang, der nächste startet 1 s nach dem vorherigen
-(die Impulse überlappen). Im Ruhezustand liegen die Ausgänge auf HIGH. Auch per seriellem Befehl `wake`.
-Pin je Slot, Impulslänge und Abstand stellt man im Pi-Dashboard unter Einstellungen ein; der Koffer erhält sie in der Antwort
-auf `POST /api/charger` (`{"ok":true,"wake":{"pins":[..10 Werte..],"ms":3000,"gap_ms":1000}}`). Vorgabe bis dahin:
-`8,9,10,11,12,13,14,15,0,1` (0–7 = GPA0–7, 8–15 = GPB0–7); bitte mit dem Schaltplan abgleichen.
+von Slot 1 bis 10 nacheinander angesteuert: je 3 s lang, der nächste startet 1 s nach dem vorherigen
+(die Impulse überlappen). Jeder Trigger ist ein 2N7000: Ausgang HIGH = Trigger an, im Ruhezustand liegen die Ausgänge auf LOW. Auch per seriellem Befehl `wake`.
+Impulslänge und Abstand stellt man im Pi-Dashboard unter Einstellungen ein; der Koffer erhält sie in der Antwort
+auf `POST /api/charger` (`{"ok":true,"wake":{"pins":[..10 Werte..],"ms":3000,"gap_ms":1000}}`). Die Pins vom Pi werden ignoriert: die Zuordnung
+ist durch die Platine fest vorgegeben (Schaltplan V3, Start_A..J) und steht in `config.h`. Slot 1..10 = U5-Pin
+`11,4,12,3,13,2,14,1,15,0` (0–7 = GPA0–7, 8–15 = GPB0–7).
 
 Im Pi-Dashboard kann zusätzlich ein einzelner belegter Ladeplatz geweckt werden. Der Pi sendet
 `"manual_wake":{"id":"<32 Hex-Zeichen>","slot":1}` in der Antwort; der Koffer pulst nur den Pin dieses Slots
@@ -39,10 +40,12 @@ für die eingestellte Impulslänge und bestätigt den Abschluss beim nächsten `
 
 | Ampel | Bedeutung |
 | --- | --- |
-| Grün | alle Taster da und voll |
-| Gelb | mindestens ein Taster lädt (blinkt, wenn nicht alle da sind) |
+| Grün | kein Fehler und kein Ladevorgang (geladen oder nichts eingesetzt, nicht unterscheidbar) |
+| Gelb | mindestens ein Platz lädt (rote LED des Lademoduls) |
 | Rot dauerhaft | Übertemperatur, Slot-Fehler (Überspannung) oder MCP23017 antwortet nicht |
 | Rot blinkend | AHT20 fehlt oder liefert keine Werte |
+
+Das TP4056-Modul liefert nur „lädt“ (rote LED). „Taster da“ und „voll“ sind nicht erkennbar, weil der Ausgang ohne Akku bei ca. 4 V liegt.
 
 Der Pieper ertönt nur bei Fehlern; ein kurzer Druck auf `TRIG_ALL` quittiert ihn bis zum nächsten neuen Fehler.
 
@@ -85,7 +88,7 @@ Bei jeder Änderung Version erhöhen und `CHANGELOG.md` ergänzen.
 | --- | --- |
 | `config.h` | Pins, Schwellwerte, Zeiten, Netz, Version |
 | `board.*` | I2C, MCP23017, Multiplexer, LEDs, Pieper, Taster |
-| `sensors.*` | Slots (da/lädt/voll/Fehler) und AHT20, ohne Wartezeiten |
+| `sensors.*` | Slots (lädt/Fehler/Spannung) und AHT20, ohne Wartezeiten |
 | `signals.*` | Gesamtstatus, Ampel, Pieper, Quittieren |
 | `netlink.*` | WLAN und Senden an den Pi in einem eigenen Task |
 | `main.cpp` | Ablauf und serielle Befehle (`status`, `mute`, `unmute`) |
@@ -101,10 +104,11 @@ von Slot-Zustand, Ampel, Alarm oder Quittierung. Der Pi bewertet den Koffer als 
 {"mac":"AA:BB:..","fw":"v0.1.0","uptime_s":120,"rssi":-55,
  "temp":24.5,"humidity":40,"aht_ok":true,"temp_alarm":false,"i2c_ok":true,
  "light":"green","fault":false,"muted":false,"wake_active":false,
- "present":10,"charging":0,"full":10,
- "slots":[{"n":1,"present":true,"charging":false,"full":true,"fault":false,"vbat":4.12}]}
+ "charging":0,
+ "slots":[{"n":1,"charging":false,"fault":false,"vbat":4.12,"since_s":null}]}
 ```
 
+`since_s`: Sekunden seit der letzten Änderung des Ladezustands, `null` wenn er sich seit dem Start nicht geändert hat.
 `light`: `off`, `green`, `yellow`, `yellow_blink`, `red`, `red_blink`. Die Zeit stempelt der Pi selbst.
 Ein optionales `wake_ack`-Feld bestätigt einen ausgeführten Einzel-Weckimpuls; die Pi-Antwort enthält bis zur Bestätigung
 `manual_wake` (oder `null`) sowie die konfigurierten Wake-Pins und Impulszeiten.

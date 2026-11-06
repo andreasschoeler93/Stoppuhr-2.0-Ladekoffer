@@ -67,9 +67,7 @@ uint32_t makeSignature(const Status& s, bool wakeActive) {
   uint32_t h = (uint32_t)s.light;
   h = h * 31 + s.muted + 2 * s.m.tempAlarm + 4 * s.m.ahtOk + 8 * s.m.i2cOk;
   h = h * 31 + wakeActive;
-  for (const SlotState& x : s.m.slots) {
-    h = h * 31 + (x.present | (x.charging << 1) | (x.full << 2) | (x.fault << 3));
-  }
+  for (const SlotState& x : s.m.slots) h = h * 31 + (x.charging | (x.fault << 1));
   return h;
 }
 
@@ -88,26 +86,23 @@ size_t buildBody(const Status& s, bool wakeActive, char* buf, size_t cap) {
   }
   appendNum(t, sizeof(t), s.m.tempC, 1);
   appendNum(h, sizeof(h), s.m.humidity, 0);
-  uint8_t present = 0, charging = 0, full = 0;
-  for (const SlotState& x : s.m.slots) {
-    present += x.present;
-    charging += x.charging;
-    full += x.full;
-  }
+  uint8_t charging = 0;
+  for (const SlotState& x : s.m.slots) charging += x.charging;
   size_t n = snprintf(buf, cap,
                       "{\"mac\":\"%s\",\"fw\":\"%s\",\"uptime_s\":%lu,\"rssi\":%d,"
                       "\"temp\":%s,\"humidity\":%s,\"aht_ok\":%s,\"temp_alarm\":%s,\"i2c_ok\":%s,"
                       "\"light\":\"%s\",\"fault\":%s,\"muted\":%s,"
-                      "\"present\":%u,\"charging\":%u,\"full\":%u,\"slots\":[",
+                      "\"charging\":%u,\"slots\":[",
                       deviceMac.c_str(), FW_VERSION, (unsigned long)(millis() / 1000), WiFi.RSSI(), t, h,
                       s.m.ahtOk ? "true" : "false", s.m.tempAlarm ? "true" : "false",
                       s.m.i2cOk ? "true" : "false", lightName(s.light), s.anyFault ? "true" : "false",
-                      s.muted ? "true" : "false", present, charging, full);
+                      s.muted ? "true" : "false", charging);
   for (uint8_t i = 0; i < cfg::SLOT_COUNT && n < cap; i++) {
     const SlotState& x = s.m.slots[i];
-    n += snprintf(buf + n, cap - n, "%s{\"n\":%u,\"present\":%s,\"charging\":%s,\"full\":%s,\"fault\":%s,\"vbat\":%.2f}",
-                  i ? "," : "", i + 1, x.present ? "true" : "false", x.charging ? "true" : "false",
-                  x.full ? "true" : "false", x.fault ? "true" : "false", x.vbat);
+    char since[16] = "null";
+    if (x.changed) snprintf(since, sizeof(since), "%lu", (unsigned long)x.sinceS);
+    n += snprintf(buf + n, cap - n, "%s{\"n\":%u,\"charging\":%s,\"fault\":%s,\"vbat\":%.2f,\"since_s\":%s}",
+                  i ? "," : "", i + 1, x.charging ? "true" : "false", x.fault ? "true" : "false", x.vbat, since);
   }
   if (n < cap) {
     n += snprintf(buf + n, cap - n, "],\"wake_active\":%s", wakeActive ? "true" : "false");
@@ -223,8 +218,15 @@ bool parseOta(const String& body, OtaOffer& out) {
   if (o < 0) return false;
   String v = jsonString(body, "\"version\"", o), m = jsonString(body, "\"md5\"", o);
   long sz = numAfter(body, "\"size\"", o, 0);
-  if (!v.length() || m.length() != 32 || sz < 100000 || sz > 1310720) return false;
+  if (!v.length() || m.length() != 32 || sz < 100000 || sz > 1966080) return false;
   if (v == FW_VERSION) return false;
+  // Nur neuere Versionen einspielen (kein Downgrade, z. B. nach dem Flashen per USB)
+  int ma = 0, mi = 0, pa = 0;
+  if (sscanf(v.c_str(), "v%d.%d.%d", &ma, &mi, &pa) == 3) {
+    const long offered = ma * 1000000L + mi * 1000L + pa;
+    const long mine = FW_VERSION_MAJOR * 1000000L + FW_VERSION_MINOR * 1000L + FW_VERSION_PATCH;
+    if (offered <= mine) return false;
+  }
   strlcpy(out.version, v.c_str(), sizeof(out.version));
   strlcpy(out.md5, m.c_str(), sizeof(out.md5));
   out.size = (uint32_t)sz;

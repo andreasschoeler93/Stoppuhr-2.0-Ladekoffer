@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.7.18)
+# Ladekoffer-Controller (v0.7.19)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -35,6 +35,10 @@ Im Pi-Dashboard kann zusätzlich ein einzelner belegter Ladeplatz geweckt werden
 `"manual_wake":{"id":"<32 Hex-Zeichen>","slot":1}` in der Antwort; der Koffer pulst nur den Pin dieses Slots
 für die eingestellte Impulslänge und bestätigt den Abschluss beim nächsten `POST /api/charger` mit `"wake_ack":"<id>"`.
 `wake_active` im Status verhindert, dass ein Einzelbefehl während einer laufenden Wecksequenz angenommen wird.
+
+Bei WLAN- oder Pi-Ausfall puffert der Koffer die Spannungsmessungen im RAM (bis zu einer Stunde, Messung alle 5 s)
+und liefert sie nach Wiederverbindung in kleinen Paketen nach. Der Pi muss dafür ab v0.41.2 laufen. Der Puffer übersteht
+keinen Neustart oder Stromausfall des Koffers; bei längeren Ausfällen werden die ältesten Werte verworfen.
 
 ## Ampel und Pieper
 

@@ -11,6 +11,8 @@ namespace netlink {
 void begin();
 // Uebergibt den aktuellen Status (nicht blockierend, kopiert nur).
 void publish(const Status& s, bool wakeActive);
+// Merkt einen 15-Sekunden-Tastendruck bis der Pi ihn bestaetigt.
+void requestSleepUnassigned();
 // Neue Weck-Einstellungen aus der Antwort des Pi; true nur einmal je Aenderung
 bool takeWakeConfig(wake::Config& out);
 // Einzel-Weckbefehl aus der Antwort des Pi; Slot ist 1-basiert.

@@ -33,7 +33,7 @@ bool initMcp() {
                           cfg::Mcp::LED_GRN_DRV};
   for (uint8_t p : outs) {
     mcp.pinMode(p, OUTPUT);
-    mcp.digitalWrite(p, LOW);
+    mcp.digitalWrite(p, cfg::Mcp::LED_ACTIVE_LOW && p != cfg::Mcp::BUZZ_EN ? HIGH : LOW);
   }
   return true;
 }
@@ -134,13 +134,14 @@ bool readCharging(uint8_t slot) {
 }
 
 void setLeds(bool red, bool yellow, bool green) {
-  digitalWrite(cfg::Pin::LED_RED, red ? HIGH : LOW);
-  digitalWrite(cfg::Pin::LED_YEL, yellow ? HIGH : LOW);
-  digitalWrite(cfg::Pin::LED_GRN, green ? HIGH : LOW);
+  const auto level = [](bool on) { return (on != cfg::Mcp::LED_ACTIVE_LOW) ? HIGH : LOW; };
+  digitalWrite(cfg::Pin::LED_RED, level(red));
+  digitalWrite(cfg::Pin::LED_YEL, level(yellow));
+  digitalWrite(cfg::Pin::LED_GRN, level(green));
   if (cfg::Mcp::MIRROR_LEDS && mcpUp) {
-    mcp.digitalWrite(cfg::Mcp::LED_RED_DRV, red ? HIGH : LOW);
-    mcp.digitalWrite(cfg::Mcp::LED_YEL_DRV, yellow ? HIGH : LOW);
-    mcp.digitalWrite(cfg::Mcp::LED_GRN_DRV, green ? HIGH : LOW);
+    mcp.digitalWrite(cfg::Mcp::LED_RED_DRV, level(red));
+    mcp.digitalWrite(cfg::Mcp::LED_YEL_DRV, level(yellow));
+    mcp.digitalWrite(cfg::Mcp::LED_GRN_DRV, level(green));
   }
 }
 

@@ -13,6 +13,7 @@ namespace {
 SemaphoreHandle_t mutex = nullptr;
 Status shared;
 bool haveStatus = false;
+volatile bool sleepUnassignedRequested = false;
 uint32_t signature = 0;
 bool sharedWakeActive = false;
 volatile int httpCode = 0;
@@ -114,7 +115,8 @@ void appendNum(char* out, size_t n, float v, int dec) {
 }
 
 // Feldnamen siehe README (Schnittstelle zum Pi)
-size_t buildBody(const Status& s, bool wakeActive, uint32_t nowMs, uint16_t historyCount, char* buf, size_t cap) {
+size_t buildBody(const Status& s, bool wakeActive, bool sleepUnassigned, uint32_t nowMs,
+                 uint16_t historyCount, char* buf, size_t cap) {
   char t[16], h[16];
   String ack;
   if (mutex && xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
@@ -160,7 +162,7 @@ size_t buildBody(const Status& s, bool wakeActive, uint32_t nowMs, uint16_t hist
     if (n < cap) n += snprintf(buf + n, cap - n, "]]");
   }
   if (n < cap) {
-    n += snprintf(buf + n, cap - n, "]");
+    n += snprintf(buf + n, cap - n, "],\"sleep_unassigned\":%s", sleepUnassigned ? "true" : "false");
   }
   if (ack.length() && n < cap) n += snprintf(buf + n, cap - n, ",\"wake_ack\":\"%s\"", ack.c_str());
   if (n < cap) n += snprintf(buf + n, cap - n, "}");
@@ -324,9 +326,9 @@ bool runOta(const OtaOffer& o) {
   return ok;
 }
 
-int post(const Status& s, bool wakeActive, uint32_t nowMs, uint16_t historyCount) {
+int post(const Status& s, bool wakeActive, bool sleepUnassigned, uint32_t nowMs, uint16_t historyCount) {
   static char body[12000];
-  if (buildBody(s, wakeActive, nowMs, historyCount, body, sizeof(body)) >= sizeof(body)) return -1;
+  if (buildBody(s, wakeActive, sleepUnassigned, nowMs, historyCount, body, sizeof(body)) >= sizeof(body)) return -1;
   String url = String("http://") + piHost + ":" + cfg::Net::PI_PORT + "/api/charger";
   HTTPClient http;
   http.setConnectTimeout(cfg::Net::HTTP_TIMEOUT_MS);
@@ -339,6 +341,10 @@ int post(const Status& s, bool wakeActive, uint32_t nowMs, uint16_t historyCount
   OtaOffer offer = {"", "", 0};
   if (code == 200) {
     const String reply = http.getString();
+    const bool sleepUnassignedAck = reply.indexOf("\"sleep_unassigned_ack\":true") >= 0;
+    if (sleepUnassigned && sleepUnassignedAck) {
+      sleepUnassignedRequested = false;
+    }
     if (reply.indexOf("\"ota_hold_ms\"") >= 0) {
       const long hold = constrain(numAfter(reply, "\"ota_hold_ms\"", 0, 0), 0, 3600000);
       otaHoldUntilMs = millis() + (uint32_t)hold;
@@ -408,11 +414,13 @@ void netTask(void*) {
     Status copy;
     uint32_t sig = 0;
     bool wakeActive = false;
+    bool sleepUnassigned = false;
     bool have = false;
     if (xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
       copy = shared;
       sig = signature;
       wakeActive = sharedWakeActive;
+      sleepUnassigned = sleepUnassignedRequested;
       have = haveStatus;
       xSemaphoreGive(mutex);
     }
@@ -449,7 +457,7 @@ void netTask(void*) {
                      (changed && since >= cfg::Net::MIN_GAP_MS);
     if (have && due) {
       const uint16_t queued = voltageCacheCount < VOLTAGE_BATCH_SIZE ? voltageCacheCount : VOLTAGE_BATCH_SIZE;
-      int code = post(copy, wakeActive, now, queued);
+      int code = post(copy, wakeActive, sleepUnassigned, now, queued);
       httpCode = code;
       lastSendMs = millis();
       // Auch bei Fehlschlag erst nach dem normalen Abstand wiederholen (Pi nicht ueberlasten)
@@ -496,6 +504,10 @@ void publish(const Status& s, bool wakeActive) {
   sharedWakeActive = wakeActive;
   haveStatus = true;
   xSemaphoreGive(mutex);
+}
+
+void requestSleepUnassigned() {
+  sleepUnassignedRequested = true;
 }
 
 bool takeWakeConfig(wake::Config& out) {

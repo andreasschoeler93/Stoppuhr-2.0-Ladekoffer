@@ -1,6 +1,7 @@
 #include "signals.h"
 
 #include "board.h"
+#include "netlink.h"
 #include "remotebeep.h"
 #include "wake.h"
 
@@ -15,6 +16,7 @@ bool rawLast = false;
 bool stable = false;
 bool stableLast = false;
 bool longFired = false;
+bool sleepUnassignedFired = false;
 uint32_t lastChangeMs = 0;
 uint32_t pressedSinceMs = 0;
 
@@ -29,18 +31,26 @@ void updateButton(uint32_t now) {
   if (stable && !stableLast) {
     pressedSinceMs = now;
     longFired = false;
+    sleepUnassignedFired = false;
     DBG("TRIG_ALL entprellt: gedrueckt");
   }
-  if (stable && !longFired && now - pressedSinceMs >= cfg::LONG_PRESS_MS) {
+  if (stable && !sleepUnassignedFired && now - pressedSinceMs >= cfg::SLEEP_UNASSIGNED_PRESS_MS) {
+    sleepUnassignedFired = true;
     longFired = true;
-    DBG("TRIG_ALL lang gehalten -> Aufwecken");
-    wake::start();
+    DBG("TRIG_ALL 15 s gehalten -> nicht zugeordnete Taster ausschalten");
+    netlink::requestSleepUnassigned();
   }
   if (!stable && stableLast) DBG("TRIG_ALL entprellt: losgelassen (lang=%d)", longFired);
   if (!stable && stableLast && !longFired) {
-    if (st.anyFault) st.muted = true;
-    if (remotebeep::active(now) || st.anyFault) remotebeep::mute();
-    DBG("Quittiert: Pieper stumm bis zur naechsten Meldung");
+    if (now - pressedSinceMs >= cfg::LONG_PRESS_MS) {
+      DBG("TRIG_ALL lang gehalten -> Aufwecken");
+      wake::start();
+      longFired = true;
+    } else {
+      if (st.anyFault) st.muted = true;
+      if (remotebeep::active(now) || st.anyFault) remotebeep::mute();
+      DBG("Quittiert: Pieper stumm bis zur naechsten Meldung");
+    }
   }
   stableLast = stable;
 }

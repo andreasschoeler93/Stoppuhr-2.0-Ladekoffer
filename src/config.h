@@ -22,7 +22,7 @@
 // Versionsschema: MAJOR.MINOR.PATCH (siehe README). Bei jeder Aenderung erhoehen.
 #define FW_VERSION_MAJOR 0
 #define FW_VERSION_MINOR 7
-#define FW_VERSION_PATCH 19
+#define FW_VERSION_PATCH 20
 #define FW_STR_(x) #x
 #define FW_STR(x) FW_STR_(x)
 #define FW_VERSION "v" FW_STR(FW_VERSION_MAJOR) "." FW_STR(FW_VERSION_MINOR) "." FW_STR(FW_VERSION_PATCH)
@@ -57,6 +57,7 @@ struct Mcp {
   static constexpr uint8_t LED_GRN_DRV = 5;
   // Ampel zusaetzlich auf die Treiberausgaenge fuer externe LEDs (J2) spiegeln
   static constexpr bool MIRROR_LEDS = true;
+  static constexpr bool LED_ACTIVE_LOW = true;
 };
 
 // AHT20 (feste I2C-Adresse)
@@ -82,8 +83,9 @@ static constexpr uint32_t MCP_RETRY_MS = 2000;
 static constexpr uint32_t BLINK_MS = 500;
 static constexpr uint32_t DEBOUNCE_MS = 40;
 static constexpr bool BTN_ACTIVE_LOW = true;
-// Taster lange halten: Taster aufwecken; kurzer Druck quittiert den Alarm
+// Taster halten: ab 1,5 s beim Loslassen aufwecken; ab 15 s Taster ohne Rolle ausschalten
 static constexpr uint32_t LONG_PRESS_MS = 1500;
+static constexpr uint32_t SLEEP_UNASSIGNED_PRESS_MS = 15000;
 
 // ---- Aufwecken der Taster ueber die Magnet-Trigger (MCP23017 U5) ----
 struct Wake {

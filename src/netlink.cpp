@@ -223,9 +223,18 @@ bool parseOta(const String& body, OtaOffer& out) {
   if (!v.length() || m.length() != 32 || sz < 100000 || sz > 1966080) return false;
   if (v == FW_VERSION) return false;
   // Nur neuere Versionen einspielen (kein Downgrade, z. B. nach dem Flashen per USB)
-  int ma = 0, mi = 0, pa = 0;
-  if (sscanf(v.c_str(), "v%d.%d.%d", &ma, &mi, &pa) == 3) {
-    const long offered = ma * 1000000L + mi * 1000L + pa;
+  // Ohne sscanf: das spart rund 16 KB Flash (die Update-Partition ist knapp)
+  const char* cur = v.c_str();
+  long parts[3] = {0, 0, 0};
+  bool parsed = *cur++ == 'v';
+  for (int i = 0; parsed && i < 3; i++) {
+    char* end = nullptr;
+    parts[i] = strtol(cur, &end, 10);
+    parsed = end != cur && (i == 2 || *end == '.');
+    cur = end + 1;
+  }
+  if (parsed) {
+    const long offered = parts[0] * 1000000L + parts[1] * 1000L + parts[2];
     const long mine = FW_VERSION_MAJOR * 1000000L + FW_VERSION_MINOR * 1000L + FW_VERSION_PATCH;
     if (offered <= mine) return false;
   }

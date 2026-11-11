@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.7.17)
+# Ladekoffer-Controller (v0.7.18)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -76,7 +76,8 @@ Der Pi liest die Version aus der Datei (Kennung `KOFFER-FW:vX.Y.Z`)
 und bietet sie in der Antwort auf `POST /api/charger` an. Der Koffer lädt sie von `GET /api/charger/firmware`, prüft die MD5-Summe
 und startet neu. Nach einem Fehler wartet er 5 Minuten bis zum nächsten Versuch. Mit „Bereitstellung beenden“ nimmt man das Angebot zurück.
 Die erste Version mit Update muss einmal per USB geflasht werden.
-
+Die `firmware.bin` darf höchstens 1.310.720 Bytes groß sein (eine OTA-Partition, `min_spiffs.csv`); der Pi lehnt größere Dateien ab.
+Vor jedem Tag die Größe prüfen und bei Bedarf Code einsparen (z. B. kein `sscanf`/`printf` mit Fließkomma).
 ### Startkontakte beim Taster-Update (ab v0.7.17)
 
 Aktualisiert der Pi (ab v0.36.0) gerade Taster, steht in seiner Antwort auf `POST /api/charger` die Restzeit `ota_hold_ms`.

@@ -4,12 +4,13 @@
 
 #include "config.h"
 
-// Weckt die Taster im Koffer der Reihe nach: Slot 1 zuerst, jeder Magnet-Trigger
+// Weckt die Taster in der konfigurierten Slot-Reihenfolge. Jeder Magnet-Trigger
 // bleibt pulseMs aktiv und startet gapMs nach dem vorherigen (die Impulse ueberlappen).
 namespace wake {
 
 struct Config {
   uint8_t pins[cfg::SLOT_COUNT];  // MCP23017-Pin (0..15) je Slot
+  uint8_t order[cfg::SLOT_COUNT];  // Slotindex (0-basiert) je Weckposition
   uint16_t pulseMs;
   uint16_t gapMs;
 };

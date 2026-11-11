@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.7.20)
+# Ladekoffer-Controller (v0.7.21)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -24,12 +24,13 @@ Der U5 (0x21) schaltet über `MAG_TRIG` die Magnetkontakte der Slots und weckt d
 ## Taster aufwecken
 
 Den Quittiertaster `TRIG_ALL` mindestens 1,5 s halten (Kurzdruck quittiert weiter den Pieper). Dann werden die Magnet-Trigger
-von Slot 1 bis 10 nacheinander angesteuert: je 3 s lang, der nächste startet 1 s nach dem vorherigen
+in der im Pi-Dashboard konfigurierten Slot-Reihenfolge angesteuert: je 3 s lang, der nächste startet 1 s nach dem vorherigen
 (die Impulse überlappen). Jeder Trigger ist ein 2N7000: Ausgang HIGH = Trigger an, im Ruhezustand liegen die Ausgänge auf LOW. Auch per seriellem Befehl `wake`.
-Impulslänge und Abstand stellt man im Pi-Dashboard unter Einstellungen ein; der Koffer erhält sie in der Antwort
-auf `POST /api/charger` (`{"ok":true,"wake":{"pins":[..10 Werte..],"ms":3000,"gap_ms":1000}}`). Die Pins vom Pi werden ignoriert: die Zuordnung
-ist durch die Platine fest vorgegeben (Schaltplan V3, Start_A..J) und steht in `config.h`. Slot 1..10 = U5-Pin
-`11,4,12,3,13,2,14,1,15,0` (0–7 = GPA0–7, 8–15 = GPB0–7).
+Die Aufweckreihenfolge, Impulslänge und Abstand stellt man im Pi-Dashboard unter Einstellungen ein; der Koffer erhält sie in der Antwort
+auf `POST /api/charger` (`{"ok":true,"wake":{"pins":[..10 Werte..],"order":[1,..,10],"ms":3000,"gap_ms":1000}}`).
+Die Pin-Zuordnung ist durch die Platine fest vorgegeben (Schaltplan V3, Start_A..J) und wird in der aktuellen Firmware nicht aus der Pi-Einstellung übernommen.
+Slot 1..10 = U5-Pin `11,4,12,3,13,2,14,1,15,0` (0–7 = GPA0–7, 8–15 = GPB0–7).
+Die Weckreihenfolge enthält jede Slotnummer 1 bis 10 genau einmal (Pi ab v0.41.4, Koffer-Firmware ab v0.7.21).
 
 Im Pi-Dashboard kann zusätzlich ein einzelner belegter Ladeplatz geweckt werden. Der Pi sendet
 `"manual_wake":{"id":"<32 Hex-Zeichen>","slot":1}` in der Antwort; der Koffer pulst nur den Pin dieses Slots

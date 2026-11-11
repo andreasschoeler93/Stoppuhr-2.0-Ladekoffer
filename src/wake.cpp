@@ -64,7 +64,10 @@ void allOff() {
 
 Config defaults() {
   Config c;
-  for (uint8_t i = 0; i < cfg::SLOT_COUNT; i++) c.pins[i] = cfg::Wake::DEFAULT_PINS[i];
+  for (uint8_t i = 0; i < cfg::SLOT_COUNT; i++) {
+    c.pins[i] = cfg::Wake::DEFAULT_PINS[i];
+    c.order[i] = i;
+  }
   c.pulseMs = cfg::Wake::DEFAULT_PULSE_MS;
   c.gapMs = cfg::Wake::DEFAULT_GAP_MS;
   return c;
@@ -128,7 +131,7 @@ void start(int8_t onlySlot) {
   startMs = millis();
   running = true;
   if (only >= 0) Serial.printf("Aufwecken: nur Slot %d (MCP-Pin %u, %u ms)\n", only + 1, run.pins[only], run.pulseMs);
-  else Serial.println("Aufwecken: Taster werden der Reihe nach geweckt");
+  else Serial.println("Aufwecken: Taster werden in konfigurierter Reihenfolge geweckt");
 }
 
 bool startSlot(uint8_t slot, const String& id) {
@@ -208,13 +211,14 @@ void update() {
     return;
   }
   const uint32_t t = now - startMs;
-  for (uint8_t i = 0; i < cfg::SLOT_COUNT; i++) {
-    if (only >= 0 && i != only) continue;
-    const uint32_t on = (only >= 0 ? 0 : (uint32_t)i) * run.gapMs;
+  for (uint8_t position = 0; position < cfg::SLOT_COUNT; position++) {
+    const uint8_t slot = run.order[position];
+    if (only >= 0 && slot != only) continue;
+    const uint32_t on = (only >= 0 ? 0 : (uint32_t)position) * run.gapMs;
     const bool want = t >= on && t < on + run.pulseMs;
-    if (want != pinOn[i]) {
-      pinOn[i] = want;
-      drivePin(i, want);
+    if (want != pinOn[slot]) {
+      pinOn[slot] = want;
+      drivePin(slot, want);
     }
   }
   const uint32_t total = (only >= 0 ? 0 : (uint32_t)(cfg::SLOT_COUNT - 1) * run.gapMs) + run.pulseMs;

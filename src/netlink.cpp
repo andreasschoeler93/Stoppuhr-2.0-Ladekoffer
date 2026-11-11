@@ -169,7 +169,7 @@ size_t buildBody(const Status& s, bool wakeActive, bool sleepUnassigned, uint32_
   return n;
 }
 
-// Liest "wake":{"pins":[..],"ms":..,"gap_ms":..} aus der Antwort des Pi
+// Liest Pin-Zuordnung und Slot-Reihenfolge aus "wake" in der Pi-Antwort.
 bool parseWake(const String& body, wake::Config& out) {
   int w = body.indexOf("\"wake\"");
   if (w < 0) return false;
@@ -185,6 +185,22 @@ bool parseWake(const String& body, wake::Config& out) {
     c.pins[i] = (uint8_t)v;
     s = end;
     while (*s == ' ' || *s == ',') s++;
+  }
+  const int orderKey = body.indexOf("\"order\"", w);
+  if (orderKey >= 0) {
+    const int orderOpen = body.indexOf('[', orderKey);
+    if (orderOpen < 0) return false;
+    s = body.c_str() + orderOpen + 1;
+    bool seen[cfg::SLOT_COUNT] = {};
+    for (uint8_t i = 0; i < cfg::SLOT_COUNT; i++) {
+      char* end = nullptr;
+      const long slot = strtol(s, &end, 10);
+      if (end == s || slot < 1 || slot > cfg::SLOT_COUNT || seen[slot - 1]) return false;
+      c.order[i] = (uint8_t)(slot - 1);
+      seen[slot - 1] = true;
+      s = end;
+      while (*s == ' ' || *s == ',') s++;
+    }
   }
   auto num = [&](const char* key, long lo, long hi, uint16_t& dst) {
     int k = body.indexOf(key, w);

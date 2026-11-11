@@ -19,6 +19,8 @@ void retryManualWakeRequest(const String& id, uint8_t slot);
 void acknowledgeManualWake(const String& id);
 // Neue Ton-Vorgaben aus der Antwort des Pi (bei jeder Antwort neu; false = nichts Neues)
 bool takeBeepConfig(remotebeep::Config& out);
+// Pi verlangt eingeschaltete Startkontakte (Taster-Update); faellt von selbst ab, wenn der Pi nichts mehr meldet
+bool otaHoldActive();
 bool connected();
 int rssi();
 // Letzter HTTP-Code des Sendens (<=0 = Netzwerkfehler, 0 = noch nichts gesendet)

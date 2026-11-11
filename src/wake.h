@@ -29,6 +29,8 @@ void start(int8_t onlySlot = -1);
 // Weckt einen einzelnen 1-basierten Slot mit derselben Pin- und Impuls-Konfiguration.
 bool startSlot(uint8_t slot, const String& requestId);
 bool active();
+// Haelt alle Startkontakte aktiv (Taster-Update im Gange); danach zurueck auf Ruhe. Ein Weckablauf hat Vorrang.
+void setHold(bool on);
 String takeCompletedRequestId();
 // Nicht blockierend im loop() aufrufen
 void update();

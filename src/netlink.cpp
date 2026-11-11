@@ -147,7 +147,9 @@ wake::Config pendingWake;
 bool wakePending = false;
 remotebeep::Config pendingBeep;
 bool beepPending = false;
-
+// Restzeit fuer die Startkontakte beim Taster-Update (vom Pi); 0 = aus
+volatile uint32_t otaHoldUntilMs = 0;
+volatile bool otaHoldOn = false;
 long numAfter(const String& body, const char* key, int from, long dflt) {
   int k = body.indexOf(key, from);
   if (k < 0) return dflt;
@@ -273,7 +275,11 @@ int post(const Status& s, bool wakeActive) {
   OtaOffer offer = {"", "", 0};
   if (code == 200) {
     const String reply = http.getString();
-    if (!parseOta(reply, offer)) offer.size = 0;
+    if (reply.indexOf("\"ota_hold_ms\"") >= 0) {
+      const long hold = constrain(numAfter(reply, "\"ota_hold_ms\"", 0, 0), 0, 3600000);
+      otaHoldUntilMs = millis() + (uint32_t)hold;
+      otaHoldOn = hold > 0;
+    }    if (!parseOta(reply, offer)) offer.size = 0;
     wake::Config w;
     remotebeep::Config bp;
     ManualWake manual = {};
@@ -464,6 +470,8 @@ bool takeBeepConfig(remotebeep::Config& out) {
   xSemaphoreGive(mutex);
   return have;
 }
+
+bool otaHoldActive() { return otaHoldOn && (int32_t)(otaHoldUntilMs - millis()) > 0; }
 
 bool connected() { return WiFi.status() == WL_CONNECTED; }
 int rssi() { return connected() ? WiFi.RSSI() : 0; }

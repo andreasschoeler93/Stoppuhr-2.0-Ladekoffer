@@ -99,6 +99,7 @@ void loop() {
       }
     }
   }
+  wake::setHold(netlink::otaHoldActive());
   wake::update();
   const String completedWakeId = wake::takeCompletedRequestId();
   if (completedWakeId.length()) netlink::acknowledgeManualWake(completedWakeId);

@@ -28,6 +28,8 @@ bool pinOn[cfg::SLOT_COUNT] = {};
 String requestId;
 String completedRequestId;
 bool activeLow = cfg::Wake::ACTIVE_LOW;
+bool holdWanted = false;
+bool holdApplied = false;
 
 void drivePin(uint8_t slot, bool on) {
   if (!mcpUp) return;
@@ -147,6 +149,8 @@ bool startSlot(uint8_t slot, const String& id) {
 
 bool active() { return running || pinTest; }
 
+void setHold(bool on) { holdWanted = on; }
+
 void startPinTest() {
   if (running || pinTest) return;
   if (!mcpUp) mcpUp = initMcp();
@@ -168,6 +172,14 @@ String takeCompletedRequestId() {
 
 void update() {
   const uint32_t now = millis();
+  if (running || pinTest) {
+    holdApplied = false;  // Pins werden vom Ablauf veraendert, danach neu setzen
+  } else if (mcpUp && holdWanted != holdApplied) {
+    const bool level = activeLow ? !holdWanted : holdWanted;
+    for (uint8_t i = 0; i < cfg::SLOT_COUNT; i++) mcp.digitalWrite(cfg::Wake::DEFAULT_PINS[i], level ? HIGH : LOW);
+    holdApplied = holdWanted;
+    Serial.printf("Taster-Update: Startkontakte %s\n", holdWanted ? "EIN" : "aus");
+  }
   if (pinTest) {
     const uint32_t t = now - pinTestMs;
     static bool on = false;

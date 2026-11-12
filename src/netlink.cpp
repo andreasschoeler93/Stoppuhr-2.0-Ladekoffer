@@ -285,8 +285,8 @@ bool parseManualWake(const String& body, ManualWake& out, bool& fieldPresent) {
   if (close < 0) return false;
   const String item = body.substring(open, close + 1);
   const String id = jsonString(item, "\"id\"", 0);
-  const long slot = numAfter(item, "\"slot\"", 0, 0);
-  if (id.length() != 32 || slot < 1 || slot > cfg::SLOT_COUNT) return false;
+  const long slot = numAfter(item, "\"slot\"", 0, -1);
+  if (id.length() != 32 || slot < 0 || slot > cfg::SLOT_COUNT) return false;
   for (unsigned int i = 0; i < id.length(); i++) {
     if (!isxdigit((unsigned char)id[i])) return false;
   }

@@ -134,19 +134,20 @@ void start(int8_t onlySlot) {
   else Serial.println("Aufwecken: Taster werden in konfigurierter Reihenfolge geweckt");
 }
 
-bool startSlot(uint8_t slot, const String& id) {
-  if (running || slot < 1 || slot > cfg::SLOT_COUNT || !id.length()) return false;
+bool startRequest(uint8_t slot, const String& id) {
+  if (running || pinTest || slot > cfg::SLOT_COUNT || !id.length()) return false;
   if (!mcpUp) mcpUp = initMcp();
   if (!mcpUp) {
     Serial.println("Einzel-Aufwecken: MCP23017 U5 (0x21) antwortet nicht");
     return false;
   }
   run = cfgNow;
-  only = slot - 1;
+  only = slot == 0 ? -1 : slot - 1;
   requestId = id;
   startMs = millis();
   running = true;
-  Serial.printf("Aufwecken: einzelner Taster in Slot %u\n", slot);
+  if (slot == 0) Serial.println("Aufwecken: alle Taster in konfigurierter Reihenfolge");
+  else Serial.printf("Aufwecken: einzelner Taster in Slot %u\n", slot);
   return true;
 }
 

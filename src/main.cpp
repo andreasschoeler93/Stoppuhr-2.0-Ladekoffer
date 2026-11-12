@@ -91,7 +91,7 @@ void loop() {
     String requestId;
     uint8_t slot = 0;
     if (netlink::takeManualWakeRequest(requestId, slot)) {
-      if (wake::startSlot(slot, requestId)) {
+      if (wake::startRequest(slot, requestId)) {
         manualWakeRetryAtMs = 0;
       } else {
         netlink::retryManualWakeRequest(requestId, slot);

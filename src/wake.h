@@ -27,8 +27,8 @@ void startPinTest();
 void begin();
 // Startet die Sequenz (ignoriert, solange eine laeuft); onlySlot 0..9 weckt nur diesen Slot
 void start(int8_t onlySlot = -1);
-// Weckt einen einzelnen 1-basierten Slot mit derselben Pin- und Impuls-Konfiguration.
-bool startSlot(uint8_t slot, const String& requestId);
+// Slot 0 startet die gesamte Sequenz, 1..10 einen einzelnen Slot.
+bool startRequest(uint8_t slot, const String& requestId);
 bool active();
 // Haelt alle Startkontakte aktiv (Taster-Update im Gange); danach zurueck auf Ruhe. Ein Weckablauf hat Vorrang.
 void setHold(bool on);

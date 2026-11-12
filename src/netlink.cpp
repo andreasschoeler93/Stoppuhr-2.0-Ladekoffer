@@ -105,7 +105,8 @@ const char* lightName(Light l) {
 // Fasst alles zusammen, was eine sofortige Meldung rechtfertigt (ohne Messwerte wie vbat)
 uint32_t makeSignature(const Status& s, bool wakeActive) {
   uint32_t h = (uint32_t)s.light;
-  h = h * 31 + s.muted + 2 * s.m.tempAlarm + 4 * s.m.ahtOk + 8 * s.m.i2cOk;
+  h = h * 31 + s.muted + 2 * s.m.tempAlarm + 4 * s.m.ahtOk + 8 * s.m.i2cOk +
+      16 * s.m.currentOk + 32 * s.m.currentSaturated;
   h = h * 31 + wakeActive;
   for (const SlotState& x : s.m.slots) h = h * 31 + (x.charging | (x.fault << 1));
   return h;
@@ -119,7 +120,7 @@ void appendNum(char* out, size_t n, float v, int dec) {
 // Feldnamen siehe README (Schnittstelle zum Pi)
 size_t buildBody(const Status& s, bool wakeActive, bool sleepUnassigned, uint32_t nowMs,
                  uint16_t historyCount, char* buf, size_t cap) {
-  char t[16], h[16];
+  char t[16], h[16], current[16];
   String ack;
   if (mutex && xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
     ack = wakeAck;
@@ -127,16 +128,19 @@ size_t buildBody(const Status& s, bool wakeActive, bool sleepUnassigned, uint32_
   }
   appendNum(t, sizeof(t), s.m.tempC, 1);
   appendNum(h, sizeof(h), s.m.humidity, 0);
+  appendNum(current, sizeof(current), s.m.currentA, 4);
   uint8_t charging = 0;
   for (const SlotState& x : s.m.slots) charging += x.charging;
   size_t n = snprintf(buf, cap,
                       "{\"mac\":\"%s\",\"fw\":\"%s\",\"uptime_s\":%lu,\"rssi\":%d,"
                       "\"temp\":%s,\"humidity\":%s,\"aht_ok\":%s,\"temp_alarm\":%s,\"i2c_ok\":%s,"
+                      "\"current_a\":%s,\"current_ok\":%s,\"current_saturated\":%s,"
                       "\"light\":\"%s\",\"fault\":%s,\"muted\":%s,"
                       "\"charging\":%u,\"slots\":[",
                       deviceMac.c_str(), FW_VERSION, (unsigned long)(millis() / 1000), WiFi.RSSI(), t, h,
                       s.m.ahtOk ? "true" : "false", s.m.tempAlarm ? "true" : "false",
-                      s.m.i2cOk ? "true" : "false", lightName(s.light), s.anyFault ? "true" : "false",
+                      s.m.i2cOk ? "true" : "false", current, s.m.currentOk ? "true" : "false",
+                      s.m.currentSaturated ? "true" : "false", lightName(s.light), s.anyFault ? "true" : "false",
                       s.muted ? "true" : "false", charging);
   for (uint8_t i = 0; i < cfg::SLOT_COUNT && n < cap; i++) {
     const SlotState& x = s.m.slots[i];

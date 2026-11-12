@@ -2,6 +2,7 @@
 
 | Version | Datum | Änderung |
 | --- | --- | --- |
+| v0.7.25 | 2026-11-12 | INA226 mit R100-Shunt an I²C-Adresse 0x40: Gesamtstrom oder ungültiger Messzustand an den Pi (ab v0.41.10). Messbereich etwa ±0,819 A; keine Abschaltung oder Überstromschutz. |
 | v0.7.24 | 2026-11-12 | Alle Taster per Pi-Oberfläche wecken: Dieselbe konfigurierte Sequenz wie beim langen Tastendruck wird gestartet und nach Abschluss bestätigt (Pi ab v0.41.9). |
 | v0.7.23 | 2026-11-12 | WLAN: Verbindung alle 5 s erneut versuchen, ESP32-Energiesparen deaktivieren und Abbruchgrund, Signalstärke sowie Kanal in den Diagnoseringpuffer aufnehmen. Ladeplätze: Spannungswerte erzeugen keinen Überspannungsfehler mehr, da ein leerer Ausgang ebenfalls eine hohe Spannung anzeigen kann. |
 | v0.7.22 | 2026-11-12 | Der erkannte 15-Sekunden-Druck am Quittiertaster wird am Koffer durch dreimaliges abwechselndes Blinken der roten und grünen LED bestätigt. Zusätzlich puffert der Koffer die letzten 24 Diagnoseereignisse und überträgt sie an den Pi. |

@@ -19,6 +19,52 @@ bool ahtInitDone = false;
 float lastTemp = NAN;
 float lastHum = NAN;
 
+bool readInaRegister(uint8_t reg, uint16_t& value) {
+  Wire.beginTransmission(cfg::INA226_ADDR);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom((int)cfg::INA226_ADDR, 2) != 2) return false;
+  value = (static_cast<uint16_t>(Wire.read()) << 8) | Wire.read();
+  return true;
+}
+
+void updateCurrent(uint32_t now) {
+  static uint32_t lastMs = 0;
+  static bool configured = false;
+  if (lastMs && now - lastMs < 1000) return;
+  lastMs = now ? now : 1;
+  uint16_t manufacturer, device, config, flags, raw;
+  if (!readInaRegister(0xfe, manufacturer) || manufacturer != 0x5449 ||
+      !readInaRegister(0xff, device) || (device & 0xfff0) != 0x2260 ||
+      !readInaRegister(0x00, config)) {
+    configured = false;
+    data.currentOk = false;
+    data.currentSaturated = false;
+    data.currentA = NAN;
+    return;
+  }
+  if (!configured || config != 0x4127) {
+    Wire.beginTransmission(cfg::INA226_ADDR);
+    Wire.write(0x00);
+    Wire.write(0x41);
+    Wire.write(0x27);
+    configured = Wire.endTransmission() == 0;
+    data.currentOk = false;
+    data.currentSaturated = false;
+    data.currentA = NAN;
+    return;
+  }
+  if (!readInaRegister(0x06, flags) || !(flags & 0x0008) || !readInaRegister(0x01, raw)) {
+    data.currentOk = false;
+    data.currentSaturated = false;
+    data.currentA = NAN;
+    return;
+  }
+  data.currentOk = true;
+  data.currentSaturated = raw == 0x7fff || raw == 0x8000;
+  data.currentA = data.currentSaturated ? NAN : static_cast<int16_t>(raw) * 0.000025f;
+}
+
 bool ahtInit() {
   Wire.beginTransmission(cfg::AHT_ADDR);
   Wire.write(0x71);  // Status lesen
@@ -122,6 +168,7 @@ void update() {
     scanSlots();
   }
   updateTemperature(now);
+  updateCurrent(now);
   data.i2cOk = board::i2cOk();
 }
 

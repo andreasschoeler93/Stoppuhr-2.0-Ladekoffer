@@ -18,6 +18,9 @@ struct Measurements {
   SlotState slots[cfg::SLOT_COUNT];
   float tempC = NAN;
   float humidity = NAN;
+  float currentA = NAN;
+  bool currentOk = false;
+  bool currentSaturated = false;
   bool ahtOk = false;
   bool tempAlarm = false;
   bool i2cOk = false;  // MCP23017 antwortet

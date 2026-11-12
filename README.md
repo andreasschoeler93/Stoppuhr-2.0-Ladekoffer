@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.7.21)
+# Ladekoffer-Controller (v0.7.23)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -32,6 +32,12 @@ Die Pin-Zuordnung ist durch die Platine fest vorgegeben (Schaltplan V3, Start_A.
 Slot 1..10 = U5-Pin `11,4,12,3,13,2,14,1,15,0` (0–7 = GPA0–7, 8–15 = GPB0–7).
 Die Weckreihenfolge enthält jede Slotnummer 1 bis 10 genau einmal (Pi ab v0.41.4, Koffer-Firmware ab v0.7.21).
 
+Wird `TRIG_ALL` 15 s gehalten, fordert der Koffer den Pi auf, nicht zugeordnete Taster auszuschalten. Als lokale Bestätigung
+blinken Rot und Grün anschließend abwechselnd dreimal (Koffer-Firmware ab v0.7.22); die eigentliche Abschaltung benötigt Pi v0.41.3 oder neuer.
+Die Firmware puffert außerdem die letzten 24 Diagnoseereignisse im RAM und überträgt den Ringpuffer mit den Statusmeldungen an den Pi (Diagnose-Download ab Pi v0.41.6); ein Neustart setzt ihn zurück. WLAN-Wiederverbindungen werden alle 5 s versucht, und die Diagnose protokolliert Abbruchgrund, Signalstärke und Kanal (ab v0.7.23).
+
+Die Spannungsmessung am Ladeausgang kann einen leeren Platz nicht sicher von einem eingesetzten Akku unterscheiden. Sie wird weiterhin für den Verlauf angezeigt, aber nicht mehr als Überspannungsfehler bewertet (ab v0.7.23).
+
 Im Pi-Dashboard kann zusätzlich ein einzelner belegter Ladeplatz geweckt werden. Der Pi sendet
 `"manual_wake":{"id":"<32 Hex-Zeichen>","slot":1}` in der Antwort; der Koffer pulst nur den Pin dieses Slots
 für die eingestellte Impulslänge und bestätigt den Abschluss beim nächsten `POST /api/charger` mit `"wake_ack":"<id>"`.
@@ -51,7 +57,7 @@ Wird er 15 s gehalten, fordert der Koffer den Pi auf, nur Taster ohne zugeordnet
 | --- | --- |
 | Grün | kein Fehler und kein Ladevorgang (geladen oder nichts eingesetzt, nicht unterscheidbar) |
 | Gelb | mindestens ein Platz lädt (rote LED des Lademoduls) |
-| Rot dauerhaft | Übertemperatur, Slot-Fehler (Überspannung) oder MCP23017 antwortet nicht |
+| Rot dauerhaft | Übertemperatur oder MCP23017 antwortet nicht |
 | Rot blinkend | AHT20 fehlt oder liefert keine Werte |
 
 Das TP4056-Modul liefert nur „lädt“ (rote LED). „Taster da“ und „voll“ sind nicht erkennbar, weil der Ausgang ohne Akku bei ca. 4 V liegt.

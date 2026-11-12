@@ -7,6 +7,8 @@
 #include <WiFi.h>
 #include <math.h>
 
+#include "device_log.h"
+
 namespace netlink {
 namespace {
 
@@ -165,6 +167,12 @@ size_t buildBody(const Status& s, bool wakeActive, bool sleepUnassigned, uint32_
     n += snprintf(buf + n, cap - n, "],\"sleep_unassigned\":%s", sleepUnassigned ? "true" : "false");
   }
   if (ack.length() && n < cap) n += snprintf(buf + n, cap - n, ",\"wake_ack\":\"%s\"", ack.c_str());
+  if (n < cap) n += snprintf(buf + n, cap - n, ",\"logs\":");
+  if (n < cap) {
+    const size_t logsLength = device_log::appendJson(buf + n, cap - n);
+    if (!logsLength) return cap;
+    n += logsLength;
+  }
   if (n < cap) n += snprintf(buf + n, cap - n, "}");
   return n;
 }
@@ -354,6 +362,7 @@ int post(const Status& s, bool wakeActive, bool sleepUnassigned, uint32_t nowMs,
   http.addHeader("Content-Type", "application/json");
   if (apiKey.length()) http.addHeader("X-Api-Key", apiKey);
   int code = http.POST((uint8_t*)body, strlen(body));
+  if (code != 200) device_log::addf("status upload failed http=%d", code);
   OtaOffer offer = {"", "", 0};
   if (code == 200) {
     const String reply = http.getString();
@@ -424,6 +433,8 @@ void netTask(void*) {
   uint32_t lastCacheMs = 0;
   uint32_t sentSignature = 0;
   bool sentOnce = false;
+  bool wifiStarted = false;
+  bool haveTriedWifi = false;
   bool wasConnected = false;
   for (;;) {
     uint32_t now = millis();
@@ -448,15 +459,18 @@ void netTask(void*) {
     if (WiFi.status() != WL_CONNECTED) {
       if (wasConnected) {
         Serial.printf("WLAN getrennt (Statuscode %d)\n", (int)WiFi.status());
+        device_log::addf("WiFi link lost status=%d", (int)WiFi.status());
         wasConnected = false;
       }
-      if (now - lastTryMs >= cfg::Net::WIFI_RETRY_MS || lastTryMs == 0) {
+      if (!haveTriedWifi || now - lastTryMs >= cfg::Net::WIFI_RETRY_MS) {
         // Der Statuscode vor dem Neustart zeigt, woran der letzte Versuch scheiterte
         Serial.printf("WLAN: Verbindungsversuch zu \"%s\" (vorheriger Statuscode %d)\n", wifiSsid.c_str(),
                       (int)WiFi.status());
+        device_log::addf("WiFi reconnect attempt status=%d", (int)WiFi.status());
         lastTryMs = now;
-        WiFi.disconnect();
-        WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+        haveTriedWifi = true;
+        if (!wifiStarted || !WiFi.reconnect()) WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+        wifiStarted = true;
       }
       vTaskDelay(pdMS_TO_TICKS(200));
       continue;
@@ -464,6 +478,7 @@ void netTask(void*) {
 
     if (!wasConnected) {
       Serial.printf("WLAN verbunden, IP: %s\n", WiFi.localIP().toString().c_str());
+      device_log::addf("WiFi connected rssi=%d channel=%u", WiFi.RSSI(), WiFi.channel());
       wasConnected = true;
     }
 
@@ -497,11 +512,13 @@ void begin() {
   WiFi.mode(WIFI_STA);
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
+  WiFi.setSleep(false);
   WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);  // das WLAN ist versteckt
   WiFi.setHostname("ladekoffer");
   WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);  // Der Pi-Zugangspunkt wird sonst bei aelterem WPA-Modus abgelehnt (Grund 211)
   WiFi.onEvent([](arduino_event_id_t, arduino_event_info_t info) {
     Serial.printf("WLAN getrennt, Grund %d\n", (int)info.wifi_sta_disconnected.reason);
+    device_log::addf("WiFi disconnected reason=%u", info.wifi_sta_disconnected.reason);
   }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
   loadCredentials();
   deviceMac = WiFi.macAddress();

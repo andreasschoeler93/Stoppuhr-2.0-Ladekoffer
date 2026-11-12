@@ -22,7 +22,7 @@
 // Versionsschema: MAJOR.MINOR.PATCH (siehe README). Bei jeder Aenderung erhoehen.
 #define FW_VERSION_MAJOR 0
 #define FW_VERSION_MINOR 7
-#define FW_VERSION_PATCH 21
+#define FW_VERSION_PATCH 23
 #define FW_STR_(x) #x
 #define FW_STR(x) FW_STR_(x)
 #define FW_VERSION "v" FW_STR(FW_VERSION_MAJOR) "." FW_STR(FW_VERSION_MINOR) "." FW_STR(FW_VERSION_PATCH)
@@ -68,7 +68,6 @@ static constexpr uint8_t AHT_ADDR = 0x38;
 static constexpr bool STAT_ACTIVE_LOW = false;
 // Spannungsteiler je Slot: 200 kOhm oben, 100 kOhm unten -> Vbat = Vadc * 3
 static constexpr float VBAT_DIV_RATIO = 3.0f;
-static constexpr float VBAT_ABS_MAX_V = 4.30f;
 static constexpr uint8_t ADC_SAMPLES = 4;
 
 static constexpr float TEMP_ALARM_ON_C = 60.0f;
@@ -106,7 +105,7 @@ struct Net {
   static constexpr uint16_t PI_PORT = 1999;
   static constexpr const char* API_KEY = SECRET_API_KEY;
   static constexpr uint32_t HTTP_TIMEOUT_MS = 1500;
-  static constexpr uint32_t WIFI_RETRY_MS = 15000;
+  static constexpr uint32_t WIFI_RETRY_MS = 5000;
   // Der Pi wertet den Koffer als offline, wenn laenger nichts kommt (dort 30 s)
   static constexpr uint32_t SEND_INTERVAL_MS = 5000;
   // Aenderungen werden frueher gesendet, aber nie dichter als dieser Abstand

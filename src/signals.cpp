@@ -19,6 +19,11 @@ bool longFired = false;
 bool sleepUnassignedFired = false;
 uint32_t lastChangeMs = 0;
 uint32_t pressedSinceMs = 0;
+uint32_t sleepFeedbackStartedMs = 0;
+bool sleepFeedbackActive = false;
+
+constexpr uint32_t SLEEP_FEEDBACK_PHASE_MS = 250;
+constexpr uint32_t SLEEP_FEEDBACK_PHASES = 6;
 
 void updateButton(uint32_t now) {
   bool raw = board::ackPressedRaw();
@@ -37,6 +42,8 @@ void updateButton(uint32_t now) {
   if (stable && !sleepUnassignedFired && now - pressedSinceMs >= cfg::SLEEP_UNASSIGNED_PRESS_MS) {
     sleepUnassignedFired = true;
     longFired = true;
+    sleepFeedbackStartedMs = now;
+    sleepFeedbackActive = true;
     DBG("TRIG_ALL 15 s gehalten -> nicht zugeordnete Taster ausschalten");
     netlink::requestSleepUnassigned();
   }
@@ -58,21 +65,18 @@ void updateButton(uint32_t now) {
 void aggregate(const Measurements& m) {
   st.m = m;
   st.anyCharging = false;
-  bool slotFault = false;
   for (const SlotState& s : m.slots) {
     st.anyCharging |= s.charging;
-    slotFault |= s.fault;
   }
   st.sensorFault = !m.ahtOk;
-  // Roter Dauerfehler: Temperatur, Slot oder ausgefallener I2C-Baustein
-  st.hardFault = m.tempAlarm || slotFault || !m.i2cOk;
+  st.hardFault = m.tempAlarm || !m.i2cOk;
   st.anyFault = st.sensorFault || st.hardFault;
 
-  static bool pT = false, pS = false, pI = false, pA = false, pM = false;
-  if (m.tempAlarm != pT || slotFault != pS || m.i2cOk != pI || m.ahtOk != pA || st.muted != pM) {
-    DBG("Fehler: Temp-Alarm=%d Slot-Ueberspannung=%d I2C-Ausfall=%d AHT-ok=%d quittiert=%d", m.tempAlarm, slotFault,
+  static bool pT = false, pI = false, pA = false, pM = false;
+  if (m.tempAlarm != pT || m.i2cOk != pI || m.ahtOk != pA || st.muted != pM) {
+    DBG("Fehler: Temp-Alarm=%d I2C-Ausfall=%d AHT-ok=%d quittiert=%d", m.tempAlarm,
         !m.i2cOk, m.ahtOk, st.muted);
-    pT = m.tempAlarm; pS = slotFault; pI = m.i2cOk; pA = m.ahtOk; pM = st.muted;
+    pT = m.tempAlarm; pI = m.i2cOk; pA = m.ahtOk; pM = st.muted;
   }
   if (!st.anyFault) st.muted = false;
   if (st.anyFault && !lastAnyFault) st.muted = false;  // neuer Fehler -> Ton wieder aktiv
@@ -97,6 +101,16 @@ void drive(uint32_t now) {
   } else {
     st.light = Light::OFF;
     board::setLeds(false, false, false);
+  }
+
+  if (sleepFeedbackActive) {
+    const uint32_t elapsedMs = now - sleepFeedbackStartedMs;
+    if (elapsedMs >= SLEEP_FEEDBACK_PHASE_MS * SLEEP_FEEDBACK_PHASES) {
+      sleepFeedbackActive = false;
+    } else {
+      const bool red = (elapsedMs / SLEEP_FEEDBACK_PHASE_MS) % 2 == 0;
+      board::setLeds(red, false, !red);
+    }
   }
 
   static uint32_t lastToggle = 0;

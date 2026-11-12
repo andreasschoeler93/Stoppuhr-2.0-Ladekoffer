@@ -97,7 +97,7 @@ void scanSlots() {
     s.vbat = board::readVbat(i);
     // Sicher messbar: rote LED des Lademoduls (laedt) und die Spannung am Ausgang
     s.charging = board::readCharging(i);
-    s.fault = s.vbat > cfg::VBAT_ABS_MAX_V;
+    s.fault = false;
     if (!seen[i]) {
       seen[i] = true;
       prevCharging[i] = s.charging;

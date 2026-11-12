@@ -2,13 +2,15 @@
 
 #include <Arduino.h>
 
+#include "device_log.h"
+
 // Zugriff auf die Platine: I2C, MCP23017, Multiplexer, Ampel, Pieper, Taster.
 namespace board {
 
 // Debug-Ausgaben ueber die serielle Schnittstelle (Befehl "debug on|off")
 extern bool debugOn;
 #define DBG(...) \
-  do { if (board::debugOn) { Serial.printf("[%lu] ", (unsigned long)millis()); Serial.printf(__VA_ARGS__); Serial.println(); } } while (0)
+  do { if (board::debugOn) { device_log::addf(__VA_ARGS__); Serial.printf("[%lu] ", (unsigned long)millis()); Serial.printf(__VA_ARGS__); Serial.println(); } } while (0)
 
 // Sucht Geraete am I2C-Bus und gibt die Adressen aus
 void i2cScan();

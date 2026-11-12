@@ -2,6 +2,8 @@
 
 | Version | Datum | Änderung |
 | --- | --- | --- |
+| v0.7.23 | 2026-11-12 | WLAN: Verbindung alle 5 s erneut versuchen, ESP32-Energiesparen deaktivieren und Abbruchgrund, Signalstärke sowie Kanal in den Diagnoseringpuffer aufnehmen. Ladeplätze: Spannungswerte erzeugen keinen Überspannungsfehler mehr, da ein leerer Ausgang ebenfalls eine hohe Spannung anzeigen kann. |
+| v0.7.22 | 2026-11-12 | Der erkannte 15-Sekunden-Druck am Quittiertaster wird am Koffer durch dreimaliges abwechselndes Blinken der roten und grünen LED bestätigt. Zusätzlich puffert der Koffer die letzten 24 Diagnoseereignisse und überträgt sie an den Pi. |
 | v0.7.21 | 2026-11-11 | Taster aufwecken: Der Pi kann zusätzlich zur festen Pin-Zuordnung eine eigene Reihenfolge der Slots 1–10 übermitteln (Pi ab v0.41.4). |
 | v0.7.20 | 2026-11-11 | Quittiertaster: 1,5 bis unter 15 s halten und loslassen weckt alle Taster; 15 s halten fordert den Pi auf, Taster ohne Rolle schlafen zu schicken (Pi ab v0.41.3). Ampel-LED-Ausgänge auf aktiv-low umgestellt. |
 | v0.7.19 | 2026-11-11 | Spannungsverlauf: Bei WLAN- oder Pi-Ausfall puffert der Koffer bis zu eine Stunde Spannungsmessungen im RAM und liefert sie nach Wiederverbindung in Paketen zu je 60 Messungen an den Pi nach (Pi ab v0.41.2). Neustart oder Stromausfall löscht den Puffer; bei längerem Ausfall werden die ältesten Werte überschrieben. |

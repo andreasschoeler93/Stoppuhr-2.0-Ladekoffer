@@ -22,7 +22,7 @@
 // Versionsschema: MAJOR.MINOR.PATCH (siehe README). Bei jeder Aenderung erhoehen.
 #define FW_VERSION_MAJOR 0
 #define FW_VERSION_MINOR 7
-#define FW_VERSION_PATCH 25
+#define FW_VERSION_PATCH 26
 #define FW_STR_(x) #x
 #define FW_STR(x) FW_STR_(x)
 #define FW_VERSION "v" FW_STR(FW_VERSION_MAJOR) "." FW_STR(FW_VERSION_MINOR) "." FW_STR(FW_VERSION_PATCH)
@@ -63,6 +63,8 @@ struct Mcp {
 // AHT20 (feste I2C-Adresse)
 static constexpr uint8_t AHT_ADDR = 0x38;
 static constexpr uint8_t INA226_ADDR = 0x40;
+static constexpr float INA226_SHUNT_OHMS = 0.002f;  // R002
+static constexpr float INA226_SHUNT_LSB_V = 2.5e-6f;
 
 // ---- Messung ----
 // STAT ist an der roten LED des TP4056-Moduls angelötet: LED an (laedt) = HIGH, LED aus = LOW

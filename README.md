@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.7.25)
+# Ladekoffer-Controller (v0.7.26)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -12,18 +12,18 @@ Versionsverlauf: [CHANGELOG.md](CHANGELOG.md). Verdrahtung: [docs/wiring.md](doc
 - MCP23017 `U2` (0x20): STAT der 10 TP4056, Pieper, Treiber für externe LEDs
 - 2× 74HC4051 (`U3`, `U4`): Akkuspannung der Slots auf 2 ADC-Pins (Teiler 200 k / 100 k, Faktor 3)
 - AHT20: Temperatur und Feuchte
-- Optional INA226 mit R100-Shunt (0,1 Ω), I²C-Adresse `0x40`: Gesamtstrom
+- Optional INA226 mit R002-Shunt (0,002 Ω), I²C-Adresse `0x40`: Gesamtstrom
 - Ampel (Rot/Gelb/Grün) direkt am ESP, Taster `TRIG_ALL` quittiert den Alarm
 
 Der U5 (0x21) schaltet über `MAG_TRIG` die Magnetkontakte der Slots und weckt damit die Taster (siehe „Taster aufwecken“).
 
 Der INA226 benötigt eine geeignete Versorgung und I²C-Pegel passend zur Platine; seine tatsächliche Adresse
 muss `0x40` sein. Für die Strommessung muss der Shunt im zu messenden Strompfad liegen – die gemeinsame
-I²C-Verbindung mit dem AHT20 allein misst keinen Strom. Die Firmware ist fest auf R100 (0,1 Ω) ausgelegt;
-ein anderer Shunt erfordert eine Anpassung. Der rechnerische Messbereich endet bei etwa ±0,819 A.
+I²C-Verbindung mit dem AHT20 allein misst keinen Strom. Die Firmware ist auf R002 (0,002 Ω) ausgelegt;
+der rechnerische INA226-Messbereich endet bei etwa ±40,96 A.
 Am Messbereichsende und bei fehlender frischer Messung meldet der Koffer keinen Stromwert; Pi ab v0.41.10
 zeigt Zustand und Verlauf. Abgetastete Messwerte und das Erkennen des Bereichsendes erfassen kurze Spitzen
-und Überlast nicht zuverlässig. Die Schwellen 8,5/9,5 A sind nicht messbar, es gibt keine Abschaltung und
+und Überlast nicht zuverlässig. Stromwarnschwellen werden nicht ausgewertet; es gibt keine Abschaltung und
 keinen Überstromschutz durch diese Software. Strompfad, Sensor und Sicherung müssen unabhängig davon für
 die tatsächliche Last geeignet sein.
 

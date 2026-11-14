@@ -62,7 +62,9 @@ void updateCurrent(uint32_t now) {
   }
   data.currentOk = true;
   data.currentSaturated = raw == 0x7fff || raw == 0x8000;
-  data.currentA = data.currentSaturated ? NAN : static_cast<int16_t>(raw) * 0.000025f;
+  data.currentA = data.currentSaturated
+                      ? NAN
+                      : static_cast<int16_t>(raw) * cfg::INA226_SHUNT_LSB_V / cfg::INA226_SHUNT_OHMS;
 }
 
 bool ahtInit() {

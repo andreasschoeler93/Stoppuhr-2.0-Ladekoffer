@@ -36,42 +36,6 @@ String wifiPass = cfg::Net::WIFI_PASS;
 String piHost = cfg::Net::PI_HOST;
 String apiKey = cfg::Net::API_KEY;
 
-constexpr uint16_t VOLTAGE_CACHE_CAPACITY = 720;
-constexpr uint8_t VOLTAGE_BATCH_SIZE = 60;
-constexpr uint16_t VOLTAGE_CACHE_EMPTY = UINT16_MAX;
-struct VoltageSample {
-  uint32_t capturedAtMs;
-  uint16_t centivolts[cfg::SLOT_COUNT];
-};
-VoltageSample voltageCache[VOLTAGE_CACHE_CAPACITY];
-uint16_t voltageCacheHead = 0;
-uint16_t voltageCacheCount = 0;
-
-void cacheVoltages(const Status& s, uint32_t capturedAtMs) {
-  uint16_t index;
-  if (voltageCacheCount < VOLTAGE_CACHE_CAPACITY) {
-    index = (voltageCacheHead + voltageCacheCount) % VOLTAGE_CACHE_CAPACITY;
-    voltageCacheCount++;
-  } else {
-    index = voltageCacheHead;
-    voltageCacheHead = (voltageCacheHead + 1) % VOLTAGE_CACHE_CAPACITY;
-  }
-  VoltageSample& sample = voltageCache[index];
-  sample.capturedAtMs = capturedAtMs;
-  for (uint8_t i = 0; i < cfg::SLOT_COUNT; i++) {
-    const float voltage = s.m.slots[i].vbat;
-    sample.centivolts[i] = isfinite(voltage) && voltage >= 0.0f && voltage <= 10.0f
-                               ? (uint16_t)lroundf(voltage * 100.0f)
-                               : VOLTAGE_CACHE_EMPTY;
-  }
-}
-
-void discardVoltageSamples(uint16_t count) {
-  if (count > voltageCacheCount) count = voltageCacheCount;
-  voltageCacheHead = (voltageCacheHead + count) % VOLTAGE_CACHE_CAPACITY;
-  voltageCacheCount -= count;
-}
-
 void loadCredentials() {
   Preferences p;
   if (!p.begin("net", false)) return;
@@ -118,8 +82,7 @@ void appendNum(char* out, size_t n, float v, int dec) {
 }
 
 // Feldnamen siehe README (Schnittstelle zum Pi)
-size_t buildBody(const Status& s, bool wakeActive, bool sleepUnassigned, uint32_t nowMs,
-                 uint16_t historyCount, char* buf, size_t cap) {
+size_t buildBody(const Status& s, bool wakeActive, bool sleepUnassigned, char* buf, size_t cap) {
   char t[16], h[16], current[16];
   String ack;
   if (mutex && xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
@@ -150,25 +113,8 @@ size_t buildBody(const Status& s, bool wakeActive, bool sleepUnassigned, uint32_
                   i ? "," : "", i + 1, x.charging ? "true" : "false", x.fault ? "true" : "false", x.vbat, since);
   }
   if (n < cap) {
-    n += snprintf(buf + n, cap - n, "],\"wake_active\":%s,\"voltage_history\":[",
-                  wakeActive ? "true" : "false");
-  }
-  if (historyCount > voltageCacheCount) historyCount = voltageCacheCount;
-  for (uint16_t j = 0; j < historyCount && n < cap; j++) {
-    const VoltageSample& sample = voltageCache[(voltageCacheHead + j) % VOLTAGE_CACHE_CAPACITY];
-    n += snprintf(buf + n, cap - n, "%s[%lu,[", j ? "," : "",
-                  (unsigned long)(nowMs - sample.capturedAtMs));
-    for (uint8_t i = 0; i < cfg::SLOT_COUNT && n < cap; i++) {
-      if (sample.centivolts[i] == VOLTAGE_CACHE_EMPTY) {
-        n += snprintf(buf + n, cap - n, "%snull", i ? "," : "");
-      } else {
-        n += snprintf(buf + n, cap - n, "%s%.2f", i ? "," : "", sample.centivolts[i] / 100.0f);
-      }
-    }
-    if (n < cap) n += snprintf(buf + n, cap - n, "]]");
-  }
-  if (n < cap) {
-    n += snprintf(buf + n, cap - n, "],\"sleep_unassigned\":%s", sleepUnassigned ? "true" : "false");
+    n += snprintf(buf + n, cap - n, "],\"wake_active\":%s,\"sleep_unassigned\":%s",
+                  wakeActive ? "true" : "false", sleepUnassigned ? "true" : "false");
   }
   if (ack.length() && n < cap) n += snprintf(buf + n, cap - n, ",\"wake_ack\":\"%s\"", ack.c_str());
   if (n < cap) n += snprintf(buf + n, cap - n, ",\"logs\":");
@@ -354,9 +300,9 @@ bool runOta(const OtaOffer& o) {
   return ok;
 }
 
-int post(const Status& s, bool wakeActive, bool sleepUnassigned, uint32_t nowMs, uint16_t historyCount) {
+int post(const Status& s, bool wakeActive, bool sleepUnassigned) {
   static char body[12000];
-  if (buildBody(s, wakeActive, sleepUnassigned, nowMs, historyCount, body, sizeof(body)) >= sizeof(body)) return -1;
+  if (buildBody(s, wakeActive, sleepUnassigned, body, sizeof(body)) >= sizeof(body)) return -1;
   String url = String("http://") + piHost + ":" + cfg::Net::PI_PORT + "/api/charger";
   HTTPClient http;
   http.setConnectTimeout(cfg::Net::HTTP_TIMEOUT_MS);
@@ -434,7 +380,6 @@ int post(const Status& s, bool wakeActive, bool sleepUnassigned, uint32_t nowMs,
 void netTask(void*) {
   uint32_t lastTryMs = 0;
   uint32_t lastSendMs = 0;
-  uint32_t lastCacheMs = 0;
   uint32_t sentSignature = 0;
   bool sentOnce = false;
   bool wifiStarted = false;
@@ -455,11 +400,6 @@ void netTask(void*) {
       have = haveStatus;
       xSemaphoreGive(mutex);
     }
-    if (have && (!lastCacheMs || now - lastCacheMs >= cfg::Net::SEND_INTERVAL_MS)) {
-      if (WiFi.status() != WL_CONNECTED || httpCode != 200) cacheVoltages(copy, now);
-      lastCacheMs = now;
-    }
-
     if (WiFi.status() != WL_CONNECTED) {
       if (wasConnected) {
         Serial.printf("WLAN getrennt (Statuscode %d)\n", (int)WiFi.status());
@@ -491,17 +431,12 @@ void netTask(void*) {
     const bool due = !sentOnce || since >= cfg::Net::SEND_INTERVAL_MS ||
                      (changed && since >= cfg::Net::MIN_GAP_MS);
     if (have && due) {
-      const uint16_t queued = voltageCacheCount < VOLTAGE_BATCH_SIZE ? voltageCacheCount : VOLTAGE_BATCH_SIZE;
-      int code = post(copy, wakeActive, sleepUnassigned, now, queued);
+      int code = post(copy, wakeActive, sleepUnassigned);
       httpCode = code;
       lastSendMs = millis();
       // Auch bei Fehlschlag erst nach dem normalen Abstand wiederholen (Pi nicht ueberlasten)
       if (code == 200) {
-        discardVoltageSamples(queued);
         sentSignature = sig;
-      } else {
-        cacheVoltages(copy, now);
-        lastCacheMs = now;
       }
       sentOnce = true;
     }

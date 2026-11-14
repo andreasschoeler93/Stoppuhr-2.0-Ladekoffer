@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.7.26)
+# Ladekoffer-Controller (v0.7.27)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi

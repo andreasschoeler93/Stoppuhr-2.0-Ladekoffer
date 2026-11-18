@@ -198,6 +198,8 @@ bool parseBeep(const String& body, remotebeep::Config& out) {
   out.redOn = numAfter(body, "\"red_on\"", b, 0) != 0;
   out.redMs = (uint16_t)constrain(numAfter(body, "\"red_ms\"", b, 2000), 100, 30000);
   out.redEveryMs = (uint32_t)constrain(numAfter(body, "\"red_every_ms\"", b, 10000), 1000, 3600000);
+  out.hasRedSeq = body.indexOf("\"red_seq\"", b) >= 0;
+  out.redSeq = (uint32_t)numAfter(body, "\"red_seq\"", b, 0);
   return true;
 }
 

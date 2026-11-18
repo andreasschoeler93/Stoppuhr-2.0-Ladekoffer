@@ -55,7 +55,7 @@ void updateButton(uint32_t now) {
       longFired = true;
     } else {
       if (st.anyFault) st.muted = true;
-      if (remotebeep::active(now) || st.anyFault) remotebeep::mute();
+      remotebeep::mute();
       DBG("Quittiert: Pieper stumm bis zur naechsten Meldung");
     }
   }

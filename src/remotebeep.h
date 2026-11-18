@@ -12,6 +12,8 @@ struct Config {
   bool redOn;
   uint16_t redMs;
   uint32_t redEveryMs;
+  uint32_t redSeq;
+  bool hasRedSeq;
 };
 
 void configure(const Config& c);

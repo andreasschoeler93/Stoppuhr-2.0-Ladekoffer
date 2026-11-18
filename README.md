@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.7.28)
+# Ladekoffer-Controller (v0.7.29)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -77,6 +77,8 @@ Das TP4056-Modul liefert nur „lädt“ (rote LED). „Taster da“ und „voll
 Der Pieper ertönt nur bei Fehlern; ein kurzer Druck auf `TRIG_ALL` quittiert ihn bis zum nächsten neuen Fehler.
 Dashboard-Warnungen lassen sich auch zwischen den Intervalltönen quittieren. Zusammen mit Pi v0.44.11
 bleibt eine quittierte rote Warnung bei schwankenden Messwerten still; neue Warnungen dürfen wieder piepen.
+Ab Pi v0.44.12 und Koffer v0.7.29 können eigene Übertemperatur- und MCP-Fehler auch einzeln im Dashboard
+quittiert werden. Weitere Fehler bleiben hörbar; die Ampel zeigt den Fehler weiterhin an.
 
 ## Bauen und flashen
 

@@ -10,5 +10,6 @@ void begin();
 const Status& update(const Measurements& m);
 // Alarm quittieren (z. B. ueber den seriellen Befehl)
 void mute(bool on);
+void setRemoteMute(uint8_t mask);
 
 }  // namespace signals

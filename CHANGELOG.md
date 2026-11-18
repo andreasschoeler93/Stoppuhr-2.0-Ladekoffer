@@ -2,6 +2,7 @@
 
 | Version | Datum | Änderung |
 | --- | --- | --- |
+| v0.7.29 | 2026-11-18 | Eigene Übertemperatur- und MCP-Fehlertöne einzeln über das Dashboard quittieren (Pi ab v0.44.12); neue Fehler bleiben hörbar. |
 | v0.7.28 | 2026-11-18 | Dashboard-Warntöne auch zwischen Intervallen quittieren; quittierte rote Warnungen bleiben bei gelben Meldungen stumm. Neue rote Warnungen werden mit Pi v0.44.11 einzeln erkannt. |
 | v0.7.27 | 2026-11-14 | Nicht mehr benötigte Ladeplatz-Spannungsverläufe werden weder gepuffert noch an den Pi übertragen; die aktuelle Spannung je Platz bleibt im Status enthalten. |
 | v0.7.26 | 2026-11-14 | INA226 auf R002-Shunt (0,002 Ω) skaliert: Messbereich etwa ±40,96 A; weiterhin keine Überstromabschaltung. |

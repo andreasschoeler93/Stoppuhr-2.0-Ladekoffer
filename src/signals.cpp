@@ -9,7 +9,9 @@ namespace signals {
 namespace {
 
 Status st;
-bool lastAnyFault = false;
+uint8_t acknowledgedFaults = 0;
+uint8_t remoteMask = 0;
+uint8_t activeFaults = 0;
 
 // Entprellter Taster: kurzer Druck (Loslassen) quittiert den Alarm, langes Halten weckt die Taster
 bool rawLast = false;
@@ -54,7 +56,7 @@ void updateButton(uint32_t now) {
       wake::start();
       longFired = true;
     } else {
-      if (st.anyFault) st.muted = true;
+      acknowledgedFaults |= activeFaults;
       remotebeep::mute();
       DBG("Quittiert: Pieper stumm bis zur naechsten Meldung");
     }
@@ -71,6 +73,9 @@ void aggregate(const Measurements& m) {
   st.sensorFault = !m.ahtOk;
   st.hardFault = m.tempAlarm || !m.i2cOk;
   st.anyFault = st.sensorFault || st.hardFault;
+  activeFaults = (m.tempAlarm ? 1 : 0) | (!m.i2cOk ? 2 : 0) | (!m.ahtOk ? 4 : 0);
+  acknowledgedFaults &= activeFaults;
+  st.muted = st.anyFault && (activeFaults & ~acknowledgedFaults) == 0;
 
   static bool pT = false, pI = false, pA = false, pM = false;
   if (m.tempAlarm != pT || m.i2cOk != pI || m.ahtOk != pA || st.muted != pM) {
@@ -78,9 +83,6 @@ void aggregate(const Measurements& m) {
         !m.i2cOk, m.ahtOk, st.muted);
     pT = m.tempAlarm; pI = m.i2cOk; pA = m.ahtOk; pM = st.muted;
   }
-  if (!st.anyFault) st.muted = false;
-  if (st.anyFault && !lastAnyFault) st.muted = false;  // neuer Fehler -> Ton wieder aktiv
-  lastAnyFault = st.anyFault;
 }
 
 void drive(uint32_t now) {
@@ -148,6 +150,11 @@ const Status& update(const Measurements& m) {
   return st;
 }
 
-void mute(bool on) { st.muted = on && st.anyFault; }
+void mute(bool on) { acknowledgedFaults = on ? activeFaults : 0; }
+
+void setRemoteMute(uint8_t mask) {
+  acknowledgedFaults |= (mask & ~remoteMask) & activeFaults;
+  remoteMask = mask;
+}
 
 }  // namespace signals

@@ -200,6 +200,7 @@ bool parseBeep(const String& body, remotebeep::Config& out) {
   out.redEveryMs = (uint32_t)constrain(numAfter(body, "\"red_every_ms\"", b, 10000), 1000, 3600000);
   out.hasRedSeq = body.indexOf("\"red_seq\"", b) >= 0;
   out.redSeq = (uint32_t)numAfter(body, "\"red_seq\"", b, 0);
+  out.localMute = (uint8_t)constrain(numAfter(body, "\"local_mute\"", b, 0), 0, 3);
   return true;
 }
 

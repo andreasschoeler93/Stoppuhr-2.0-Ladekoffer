@@ -14,6 +14,7 @@ struct Config {
   uint32_t redEveryMs;
   uint32_t redSeq;
   bool hasRedSeq;
+  uint8_t localMute;
 };
 
 void configure(const Config& c);

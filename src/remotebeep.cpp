@@ -7,7 +7,7 @@ constexpr uint32_t YELLOW_BEEP_MS = 300;
 // Ohne frische Antwort vom Pi (WLAN weg) verstummt der rote Dauerton
 constexpr uint32_t STALE_MS = 60000;
 
-Config cur = {false, 0, false, 2000, 10000, 0, false};
+Config cur = {false, 0, false, 2000, 10000, 0, false, 0};
 uint32_t lastConfigMs = 0;
 bool haveSeq = false;
 uint32_t lastSeq = 0;

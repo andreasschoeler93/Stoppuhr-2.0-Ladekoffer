@@ -86,7 +86,10 @@ void loop() {
         wakeCfg.pins[6], wakeCfg.pins[7], wakeCfg.pins[8], wakeCfg.pins[9]);
   }
   remotebeep::Config beepCfg;
-  if (netlink::takeBeepConfig(beepCfg)) remotebeep::configure(beepCfg);
+  if (netlink::takeBeepConfig(beepCfg)) {
+    remotebeep::configure(beepCfg);
+    signals::setRemoteMute(beepCfg.localMute);
+  }
   if (!wake::active() && millis() >= manualWakeRetryAtMs) {
     String requestId;
     uint8_t slot = 0;

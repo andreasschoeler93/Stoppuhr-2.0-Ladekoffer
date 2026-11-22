@@ -22,7 +22,7 @@
 // Versionsschema: MAJOR.MINOR.PATCH (siehe README). Bei jeder Aenderung erhoehen.
 #define FW_VERSION_MAJOR 0
 #define FW_VERSION_MINOR 7
-#define FW_VERSION_PATCH 29
+#define FW_VERSION_PATCH 30
 #define FW_STR_(x) #x
 #define FW_STR(x) FW_STR_(x)
 #define FW_VERSION "v" FW_STR(FW_VERSION_MAJOR) "." FW_STR(FW_VERSION_MINOR) "." FW_STR(FW_VERSION_PATCH)
@@ -85,9 +85,10 @@ static constexpr uint32_t MCP_RETRY_MS = 2000;
 static constexpr uint32_t BLINK_MS = 500;
 static constexpr uint32_t DEBOUNCE_MS = 40;
 static constexpr bool BTN_ACTIVE_LOW = true;
-// Taster halten: ab 1,5 s beim Loslassen aufwecken; ab 15 s Taster ohne Rolle ausschalten
+// Taster halten: ab 1,5 s beim Loslassen aufwecken; ab 5 s Taster ohne Rolle ausschalten
 static constexpr uint32_t LONG_PRESS_MS = 1500;
-static constexpr uint32_t SLEEP_UNASSIGNED_PRESS_MS = 15000;
+static constexpr uint32_t SLEEP_WARNING_START_MS = 3000;
+static constexpr uint32_t SLEEP_UNASSIGNED_PRESS_MS = 5000;
 
 // ---- Aufwecken der Taster ueber die Magnet-Trigger (MCP23017 U5) ----
 struct Wake {

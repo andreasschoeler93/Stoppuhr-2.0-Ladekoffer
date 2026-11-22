@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.7.29)
+# Ladekoffer-Controller (v0.7.30)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -43,8 +43,11 @@ Die Pin-Zuordnung ist durch die Platine fest vorgegeben (Schaltplan V3, Start_A.
 Slot 1..10 = U5-Pin `11,4,12,3,13,2,14,1,15,0` (0–7 = GPA0–7, 8–15 = GPB0–7).
 Die Weckreihenfolge enthält jede Slotnummer 1 bis 10 genau einmal (Pi ab v0.41.4, Koffer-Firmware ab v0.7.21).
 
-Wird `TRIG_ALL` 15 s gehalten, fordert der Koffer den Pi auf, nicht zugeordnete Taster auszuschalten. Als lokale Bestätigung
-blinken Rot und Grün anschließend abwechselnd dreimal (Koffer-Firmware ab v0.7.22); die eigentliche Abschaltung benötigt Pi v0.41.3 oder neuer.
+Wird `TRIG_ALL` 5 s gehalten, fordert der Koffer den Pi auf, nicht zugeordnete Taster auszuschalten.
+Ab 3 s blinkt die gelbe Ampel und bei 3 und 4 s warnt ein kurzer Piepton. Bei 5 s bestätigt ein längerer Ton
+die **Anforderung**, nicht die erfolgreiche Abschaltung. Beim Loslassen zwischen 1,5 und 5 s werden die Taster geweckt.
+Ein Fehler hat bei der Ampel Vorrang; ein nicht quittierter lokaler Fehler auch beim Pieper. Die eigentliche Abschaltung benötigt Pi v0.41.3 oder neuer;
+ohne Verbindung bleibt die Anforderung bis zur Bestätigung durch den Pi im RAM vorgemerkt.
 Die Firmware puffert außerdem die letzten 24 Diagnoseereignisse im RAM und überträgt den Ringpuffer mit den Statusmeldungen an den Pi (Diagnose-Download ab Pi v0.41.6); ein Neustart setzt ihn zurück. WLAN-Wiederverbindungen werden alle 5 s versucht, und die Diagnose protokolliert Abbruchgrund, Signalstärke und Kanal (ab v0.7.23).
 
 Die Spannungsmessung am Ladeausgang kann einen leeren Platz nicht sicher von einem eingesetzten Akku unterscheiden. Sie wird weiterhin für den Verlauf angezeigt, aber nicht mehr als Überspannungsfehler bewertet (ab v0.7.23).
@@ -59,8 +62,8 @@ Bei WLAN- oder Pi-Ausfall puffert der Koffer die Spannungsmessungen im RAM (bis 
 und liefert sie nach Wiederverbindung in kleinen Paketen nach. Der Pi muss dafür ab v0.41.2 laufen. Der Puffer übersteht
 keinen Neustart oder Stromausfall des Koffers; bei längeren Ausfällen werden die ältesten Werte verworfen.
 
-Den Quittiertaster unter 1,5 s drücken quittiert einen Alarm; 1,5 bis unter 15 s halten und dann loslassen weckt alle Taster.
-Wird er 15 s gehalten, fordert der Koffer den Pi auf, nur Taster ohne zugeordnete oder vorgemerkte Rolle auszuschalten
+Den Quittiertaster unter 1,5 s drücken quittiert einen Alarm; 1,5 bis unter 5 s halten und dann loslassen weckt alle Taster.
+Wird er 5 s gehalten, fordert der Koffer den Pi auf, nur Taster ohne zugeordnete oder vorgemerkte Rolle auszuschalten
 (Pi ab v0.41.3). Die Ampel-LEDs sind aktiv-low angesteuert.
 
 ## Ampel und Pieper
@@ -71,10 +74,18 @@ Wird er 15 s gehalten, fordert der Koffer den Pi auf, nur Taster ohne zugeordnet
 | Gelb | mindestens ein Platz lädt (rote LED des Lademoduls) |
 | Rot dauerhaft | Übertemperatur oder MCP23017 antwortet nicht |
 | Rot blinkend | AHT20 fehlt oder liefert keine Werte |
+| Gelb blinkend | Taster wird mindestens 3 s gehalten; Schlafanforderung steht bevor |
 
 Das TP4056-Modul liefert nur „lädt“ (rote LED). „Taster da“ und „voll“ sind nicht erkennbar, weil der Ausgang ohne Akku bei ca. 4 V liegt.
 
-Der Pieper ertönt nur bei Fehlern; ein kurzer Druck auf `TRIG_ALL` quittiert ihn bis zum nächsten neuen Fehler.
+Beim Start prüft der Koffer wie bisher kurz die LEDs. Sobald die erste Temperaturmessung gültig ist, ertönen
+zwei kurze Pieptöne (je 100 ms mit 100 ms Pause). Bei einem Fehler entfällt die Startfolge; die erste
+Temperaturmessung wird direkt angestoßen und ein fehlender Messwert nach etwa einer Sekunde akustisch gemeldet.
+
+Lokale Fehler haben Vorrang vor anderen Tönen: Übertemperatur piept 200 ms pro Sekunde, ein AHT20-Fehler
+80 ms pro Sekunde und ein MCP-Ausfall 100 ms alle zwei Sekunden. Der Pieper hängt selbst am MCP und kann
+bei dessen Ausfall nicht zuverlässig warnen; die direkt angeschlossene rote LED zeigt den Fehler weiterhin an.
+Ein kurzer Druck auf `TRIG_ALL` quittiert aktuelle Alarme bis zum nächsten neuen Fehler; die Fehleranzeige bleibt bestehen.
 Dashboard-Warnungen lassen sich auch zwischen den Intervalltönen quittieren. Zusammen mit Pi v0.44.11
 bleibt eine quittierte rote Warnung bei schwankenden Messwerten still; neue Warnungen dürfen wieder piepen.
 Ab Pi v0.44.12 und Koffer v0.7.29 können eigene Übertemperatur- und MCP-Fehler auch einzeln im Dashboard

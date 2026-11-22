@@ -103,8 +103,10 @@ bool ahtRead() {
 
 void updateTemperature(uint32_t now) {
   static uint32_t lastStartMs = 0;
+  static bool firstMeasurement = true;
   if (ahtState == Aht::IDLE) {
-    if (now - lastStartMs < cfg::TEMP_INTERVAL_MS) return;
+    if (!firstMeasurement && now - lastStartMs < cfg::TEMP_INTERVAL_MS) return;
+    firstMeasurement = false;
     lastStartMs = now;
     if (!ahtInitDone) ahtInitDone = ahtInit();
     if (ahtInitDone && ahtTrigger()) {

@@ -1,4 +1,4 @@
-# Ladekoffer-Controller (v0.7.30)
+# Ladekoffer-Controller (v0.7.31)
 
 Firmware für die Ladeplatine des Ladekoffers (Seeed XIAO ESP32-C3, PlatformIO, Arduino-Framework).
 Sie überwacht 10 Ladeplätze (TP4056), zeigt den Zustand mit Ampel und Pieper und meldet ihn per WLAN an den Koffer-Pi
@@ -74,8 +74,10 @@ keinen Neustart oder Stromausfall des Koffers; bei längeren Ausfällen werden d
 | 4 | Gelb dauerhaft | Mindestens ein Platz lädt (rote LED des Lademoduls) |
 | 5 | Grün dauerhaft | Kein Fehler und kein Ladevorgang |
 
-Die höchste zutreffende Priorität bestimmt die Ampel, auch nach dem Quittieren eines Fehlers. Blinkend bedeutet
-je 500 ms an und aus. Die LEDs sind aktiv-low angesteuert; die externe Ampel wird über U2 gespiegelt.
+Die höchste zutreffende Priorität bestimmt die Grundanzeige, auch nach dem Quittieren eines Fehlers. Blinkend bedeutet
+je 500 ms an und aus. Kurze Bedien- und Dashboard-Signale unterbrechen die Grundanzeige, auch Rot, und zeigen danach
+wieder den tatsächlichen Zustand. Es leuchtet immer nur eine Farbe. Die LEDs sind aktiv-low angesteuert; die externe
+Ampel wird über U2 gespiegelt.
 
 Das TP4056-Modul liefert nur „lädt“ (rote LED). „Taster da“ und „voll“ sind nicht erkennbar, weil der Ausgang ohne Akku bei ca. 4 V liegt.
 
@@ -83,15 +85,15 @@ Das TP4056-Modul liefert nur „lädt“ (rote LED). „Taster da“ und „voll
 
 | Ereignis | Signal / Aktion |
 | --- | --- |
-| Start ohne Fehler | Nach dem LED-Test zwei Pieptöne à 100 ms mit 100 ms Pause, sobald die erste Temperaturmessung gültig ist |
-| Kurzer Tastendruck unter 1,5 s | Beim Loslassen aktuelle lokale und Dashboard-Töne quittieren; kein Bestätigungston |
-| Halten von 1,5 bis unter 5 s | Beim Loslassen alle Taster in der konfigurierten Reihenfolge wecken |
+| Start ohne Fehler | LED-Test: Rot, Gelb, Grün nacheinander. Danach zwei Pieptöne à 100 ms mit 100 ms Pause, sobald die erste Temperaturmessung gültig ist |
+| Kurzer Tastendruck unter 1,5 s | Beim Loslassen aktuelle lokale und Dashboard-Töne quittieren; einmal grün blinken, kein Bestätigungston |
+| Halten von 1,5 bis unter 5 s | Ab 1,5 s zweimal grün blinken; beim Loslassen alle Taster in der konfigurierten Reihenfolge wecken |
 | Halten ab 3 s | Gelb blinkt; bei 3 und 4 s ertönt jeweils ein 100-ms-Warnton |
-| Halten ab 5 s | Schlafanforderung einmalig senden und 300 ms piepsen; beim anschließenden Loslassen nicht wecken |
+| Halten ab 5 s | Schlafanforderung einmalig senden, dreimal gelb blinken und 300 ms piepsen; beim anschließenden Loslassen nicht wecken |
 | Übertemperatur | 200 ms Ton, 800 ms Pause |
 | AHT20 ohne gültigen Wert | 80 ms Ton, 920 ms Pause |
 | MCP23017 U2 ausgefallen | 100 ms Ton, 1.900 ms Pause, sofern der Pieper noch ansteuerbar ist |
-| Dashboard-Meldung | Gelb: kurzer Ton bei neuer Meldung; Rot: wiederholter Ton nach Vorgaben des Pi |
+| Neue Dashboard-Meldung | Einmal kurz in der Meldungsfarbe blinken; Pieper: Gelb einmal, Rot nach Vorgaben des Pi wiederholt |
 
 Die Zeiten gelten für den entprellten Taster (40 ms Entprellung) und sind Näherungswerte. Ein **nicht quittierter
 lokaler Fehler** hat beim Pieper Vorrang vor Start-, Taster- und Dashboard-Tönen, auch in den Tonpausen. Bei mehreren
@@ -99,6 +101,20 @@ nicht quittierten lokalen Fehlern gilt die Reihenfolge Übertemperatur, AHT20, M
 Startfolge; sie wird auch nicht nachgeholt, wenn die erste gültige Temperaturmessung erst nach einer Sekunde eintrifft.
 Die erste Temperaturmessung wird direkt angestoßen und ein fehlender Messwert nach etwa einer Sekunde akustisch
 gemeldet. Die Ampel kann während des Wartens bereits rot blinken.
+
+Die kurzen Blinkfolgen beginnen und enden jeweils mit 150 ms Dunkelheit; jeder Farbpuls und jede Pause dauern 150 ms.
+Bei gleichzeitig neuen roten und gelben Dashboard-Meldungen wird zuerst Rot und dann Gelb gezeigt; mehrere neue
+Meldungen gleicher Farbe innerhalb eines Abrufintervalls werden zusammengefasst. Taster-Rückmeldungen haben Vorrang
+und unterbrechen gegebenenfalls die optische Dashboard-Meldung, die anschließend erneut gezeigt wird. Während der
+Taster gehalten wird, warten neue Dashboard-Signale bis zum Loslassen. Die kurzen optischen Signale werden nicht als
+Koffer-Grundzustand an den Pi zurückgemeldet.
+
+Für die optische Anzeige **aller** neuen Dashboard-Meldungen, auch bei abgeschaltetem oder quittiertem Dashboard-Ton,
+werden Pi v0.44.14 und Koffer v0.7.31 benötigt. Im Zwei-Pi-Betrieb zuerst beide Pis aktualisieren, anschließend den
+Koffer. Mit älteren Pis werden nur Meldungen angezeigt, die der Pi für den
+Pieper freigibt. Ohne geöffnetes Dashboard oder ohne Verbindung können Meldungen nicht zeitnah übertragen werden.
+Meldungen können zusammengefasst werden oder bei längeren Ausfällen verloren gehen; die Anzeige ersetzt keine
+Prüfung des Dashboards.
 
 Der Pieper hängt selbst an U2 und kann bei dessen Ausfall nicht zuverlässig warnen; die direkt angeschlossene rote
 LED zeigt den Fehler weiterhin an. Quittierte Fehler bleiben sichtbar; neu auftretende Fehler sind wieder hörbar.

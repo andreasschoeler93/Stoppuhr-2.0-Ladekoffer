@@ -201,6 +201,10 @@ bool parseBeep(const String& body, remotebeep::Config& out) {
   out.hasRedSeq = body.indexOf("\"red_seq\"", b) >= 0;
   out.redSeq = (uint32_t)numAfter(body, "\"red_seq\"", b, 0);
   out.localMute = (uint8_t)constrain(numAfter(body, "\"local_mute\"", b, 0), 0, 3);
+  out.visualYellowOn = numAfter(body, "\"visual_yellow_on\"", b, out.yellowOn) != 0;
+  out.visualRedOn = numAfter(body, "\"visual_red_on\"", b, out.redOn) != 0;
+  out.hasVisualFresh = body.indexOf("\"visual_fresh\"", b) >= 0;
+  out.visualFresh = numAfter(body, "\"visual_fresh\"", b, 0) != 0;
   return true;
 }
 

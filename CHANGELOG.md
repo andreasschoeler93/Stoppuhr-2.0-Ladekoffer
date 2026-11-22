@@ -2,6 +2,7 @@
 
 | Version | Datum | Änderung |
 | --- | --- | --- |
+| v0.7.31 | 2026-11-22 | Kurzer Tastendruck, Weckschwelle und Schlafanforderung erhalten einzelne optische Rückmeldungen; neue Dashboard-Meldungen blinken kurz in ihrer Farbe. Mit Pi v0.44.14 auch bei ausgeschaltetem Meldungston. Immer nur eine LED-Farbe gleichzeitig; lokale Fehleranzeigen werden kurz für Rückmeldungen unterbrochen. |
 | v0.7.30 | 2026-11-22 | Einheitliche Ampel- und Piep-Signale: kurze Startfolge, gelbes Blinken und Warntöne bei 3 und 4 s, Schlafanforderung nach 5 s (zuvor 15 s). Nicht quittierte lokale Fehler haben beim Pieper Vorrang; die Ampel zeigt Fehler weiter an. Erste Temperaturmessung direkt beim Start. |
 | v0.7.29 | 2026-11-18 | Eigene Übertemperatur- und MCP-Fehlertöne einzeln über das Dashboard quittieren (Pi ab v0.44.12); neue Fehler bleiben hörbar. |
 | v0.7.28 | 2026-11-18 | Dashboard-Warntöne auch zwischen Intervallen quittieren; quittierte rote Warnungen bleiben bei gelben Meldungen stumm. Neue rote Warnungen werden mit Pi v0.44.11 einzeln erkannt. |

@@ -135,19 +135,25 @@ bool readCharging(uint8_t slot) {
 
 void setLeds(bool red, bool yellow, bool green) {
   const auto level = [](bool on) { return (on != cfg::Mcp::LED_ACTIVE_LOW) ? HIGH : LOW; };
-  digitalWrite(cfg::Pin::LED_RED, level(red));
-  digitalWrite(cfg::Pin::LED_YEL, level(yellow));
-  digitalWrite(cfg::Pin::LED_GRN, level(green));
+  if (!red) digitalWrite(cfg::Pin::LED_RED, level(false));
+  if (!yellow) digitalWrite(cfg::Pin::LED_YEL, level(false));
+  if (!green) digitalWrite(cfg::Pin::LED_GRN, level(false));
+  if (red) digitalWrite(cfg::Pin::LED_RED, level(true));
+  if (yellow) digitalWrite(cfg::Pin::LED_YEL, level(true));
+  if (green) digitalWrite(cfg::Pin::LED_GRN, level(true));
   if (cfg::Mcp::MIRROR_LEDS && mcpUp) {
-    mcp.digitalWrite(cfg::Mcp::LED_RED_DRV, level(red));
-    mcp.digitalWrite(cfg::Mcp::LED_YEL_DRV, level(yellow));
-    mcp.digitalWrite(cfg::Mcp::LED_GRN_DRV, level(green));
+    if (!red) mcp.digitalWrite(cfg::Mcp::LED_RED_DRV, level(false));
+    if (!yellow) mcp.digitalWrite(cfg::Mcp::LED_YEL_DRV, level(false));
+    if (!green) mcp.digitalWrite(cfg::Mcp::LED_GRN_DRV, level(false));
+    if (red) mcp.digitalWrite(cfg::Mcp::LED_RED_DRV, level(true));
+    if (yellow) mcp.digitalWrite(cfg::Mcp::LED_YEL_DRV, level(true));
+    if (green) mcp.digitalWrite(cfg::Mcp::LED_GRN_DRV, level(true));
   }
 }
 
 void ledTest() {
   DBG("LED-Test");
-  const bool seq[4][3] = {{true, false, false}, {false, true, false}, {false, false, true}, {true, true, true}};
+  const bool seq[3][3] = {{true, false, false}, {false, true, false}, {false, false, true}};
   for (const auto& s : seq) {
     setLeds(s[0], s[1], s[2]);
     delay(500);

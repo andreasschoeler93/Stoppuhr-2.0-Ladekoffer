@@ -18,6 +18,7 @@ bool rawLast = false;
 bool stable = false;
 bool stableLast = false;
 bool longFired = false;
+bool wakeFeedbackFired = false;
 bool sleepUnassignedFired = false;
 uint32_t lastChangeMs = 0;
 uint32_t pressedSinceMs = 0;
@@ -31,6 +32,21 @@ constexpr uint32_t STARTUP_WAIT_MS = 1000;
 constexpr uint32_t STARTUP_BEEP_MS = 100;
 constexpr uint32_t SLEEP_WARNING_BEEP_MS = 100;
 constexpr uint32_t SLEEP_FEEDBACK_MS = 300;
+constexpr uint32_t VISUAL_PHASE_MS = 150;
+
+enum class Visual : uint8_t { NONE, SHORT, WAKE, SLEEP, REMOTE_YELLOW, REMOTE_RED };
+Visual visual = Visual::NONE;
+uint32_t visualStartedMs = 0;
+uint8_t pendingVisualAlerts = 0;
+
+void startVisual(Visual next, uint32_t now) {
+  if (now - visualStartedMs < 3 * VISUAL_PHASE_MS) {
+    if (visual == Visual::REMOTE_YELLOW) pendingVisualAlerts |= remotebeep::YELLOW_ALERT;
+    if (visual == Visual::REMOTE_RED) pendingVisualAlerts |= remotebeep::RED_ALERT;
+  }
+  visual = next;
+  visualStartedMs = now;
+}
 
 void updateButton(uint32_t now) {
   bool raw = board::ackPressedRaw();
@@ -43,8 +59,13 @@ void updateButton(uint32_t now) {
   if (stable && !stableLast) {
     pressedSinceMs = now;
     longFired = false;
+    wakeFeedbackFired = false;
     sleepUnassignedFired = false;
     DBG("TRIG_ALL entprellt: gedrueckt");
+  }
+  if (raw && stable && !wakeFeedbackFired && now - pressedSinceMs >= cfg::LONG_PRESS_MS) {
+    wakeFeedbackFired = true;
+    startVisual(Visual::WAKE, now);
   }
   if (raw && stable && !sleepUnassignedFired &&
       now - pressedSinceMs >= cfg::SLEEP_UNASSIGNED_PRESS_MS) {
@@ -52,18 +73,20 @@ void updateButton(uint32_t now) {
     longFired = true;
     sleepFeedbackStartedMs = now;
     sleepFeedbackActive = true;
+    startVisual(Visual::SLEEP, now);
     DBG("TRIG_ALL 5 s gehalten -> nicht zugeordnete Taster ausschalten");
     netlink::requestSleepUnassigned();
   }
   if (!stable && stableLast) DBG("TRIG_ALL entprellt: losgelassen (lang=%d)", longFired);
   if (!stable && stableLast && !longFired) {
-    if (now - pressedSinceMs >= cfg::LONG_PRESS_MS) {
+    if (lastChangeMs - pressedSinceMs >= cfg::LONG_PRESS_MS) {
       DBG("TRIG_ALL lang gehalten -> Aufwecken");
       wake::start();
       longFired = true;
     } else {
       acknowledgedFaults |= activeFaults;
       remotebeep::mute();
+      startVisual(Visual::SHORT, now);
       DBG("Quittiert: Pieper stumm bis zur naechsten Meldung");
     }
   }
@@ -94,26 +117,48 @@ void aggregate(const Measurements& m) {
 void drive(uint32_t now) {
   const bool blink = ((now / cfg::BLINK_MS) % 2) == 0;
   const uint32_t heldMs = now - pressedSinceMs;
+  bool red = false, yellow = false, green = false;
 
   if (st.hardFault) {
     st.light = Light::RED;
-    board::setLeds(true, false, false);
+    red = true;
   } else if (st.sensorFault) {
     st.light = Light::RED_BLINK;
-    board::setLeds(blink, false, false);
+    red = blink;
   } else if (stable && !sleepUnassignedFired && heldMs >= cfg::SLEEP_WARNING_START_MS) {
     st.light = Light::YELLOW_BLINK;
-    board::setLeds(false, blink, false);
+    yellow = blink;
   } else if (st.anyCharging) {
     st.light = Light::YELLOW;
-    board::setLeds(false, true, false);
+    yellow = true;
   } else if (st.m.i2cOk) {
     st.light = Light::GREEN;
-    board::setLeds(false, false, true);
+    green = true;
   } else {
     st.light = Light::OFF;
-    board::setLeds(false, false, false);
   }
+
+  pendingVisualAlerts |= remotebeep::takeVisualAlerts();
+  if (visual != Visual::NONE) {
+    const uint32_t phases = visual == Visual::WAKE ? 5 : visual == Visual::SLEEP ? 7 : 3;
+    if (now - visualStartedMs >= phases * VISUAL_PHASE_MS) visual = Visual::NONE;
+  }
+  if (visual == Visual::NONE && !stable && pendingVisualAlerts) {
+    if (pendingVisualAlerts & remotebeep::RED_ALERT) {
+      pendingVisualAlerts &= ~remotebeep::RED_ALERT;
+      startVisual(Visual::REMOTE_RED, now);
+    } else {
+      pendingVisualAlerts &= ~remotebeep::YELLOW_ALERT;
+      startVisual(Visual::REMOTE_YELLOW, now);
+    }
+  }
+  if (visual != Visual::NONE) {
+    const bool on = ((now - visualStartedMs) / VISUAL_PHASE_MS) % 2 == 1;
+    red = on && visual == Visual::REMOTE_RED;
+    yellow = on && (visual == Visual::SLEEP || visual == Visual::REMOTE_YELLOW);
+    green = on && (visual == Visual::SHORT || visual == Visual::WAKE);
+  }
+  board::setLeds(red, yellow, green);
 
   if (startupPending) {
     if (st.hardFault || now - startupStartedMs >= STARTUP_WAIT_MS) {

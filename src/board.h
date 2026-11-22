@@ -31,7 +31,7 @@ bool readCharging(uint8_t slot);
 
 void setLeds(bool red, bool yellow, bool green);
 void setBuzzer(bool on);
-// LED-Test beim Start: Rot, Gelb, Gruen nacheinander, dann alle zusammen (blockiert ca. 2 s)
+// LED-Test beim Start: Rot, Gelb, Gruen nacheinander (blockiert ca. 1,5 s)
 void ledTest();
 // Taster TRIG_ALL gedrueckt (roh, ohne Entprellung)
 bool ackPressedRaw();

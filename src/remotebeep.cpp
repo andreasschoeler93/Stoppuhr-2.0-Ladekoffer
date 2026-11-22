@@ -7,7 +7,7 @@ constexpr uint32_t YELLOW_BEEP_MS = 300;
 // Ohne frische Antwort vom Pi (WLAN weg) verstummt der rote Dauerton
 constexpr uint32_t STALE_MS = 60000;
 
-Config cur = {false, 0, false, 2000, 10000, 0, false, 0};
+Config cur = {false, 0, false, 2000, 10000, 0, false, 0, false, false, false, false};
 uint32_t lastConfigMs = 0;
 bool haveSeq = false;
 uint32_t lastSeq = 0;
@@ -20,6 +20,12 @@ uint32_t redNextAt = 0;
 uint32_t redUntil = 0;
 bool redActive = false;
 bool redSilenced = false;
+bool haveVisualSeq = false;
+uint32_t visualYellowSeq = 0;
+uint32_t visualRedSeq = 0;
+bool visualYellowWasOn = false;
+bool visualRedWasOn = false;
+uint8_t visualPending = 0;
 
 // Zeitvergleich, der den Ueberlauf von millis() uebersteht
 bool reached(uint32_t now, uint32_t t) { return (int32_t)(now - t) >= 0; }
@@ -28,6 +34,23 @@ bool reached(uint32_t now, uint32_t t) { return (int32_t)(now - t) >= 0; }
 
 void configure(const Config& c) {
   const uint32_t now = millis();
+  const bool freshYellowEvent = haveVisualSeq && c.hasVisualFresh && c.visualFresh &&
+      c.yellowSeq != visualYellowSeq;
+  const bool freshRedEvent = haveVisualSeq && c.hasVisualFresh && c.visualFresh &&
+      c.hasRedSeq && c.redSeq != visualRedSeq;
+  if (freshYellowEvent || (c.visualYellowOn &&
+      (!haveVisualSeq || !visualYellowWasOn || c.yellowSeq != visualYellowSeq))) {
+    visualPending |= YELLOW_ALERT;
+  }
+  if (freshRedEvent || (c.visualRedOn &&
+      (!haveVisualSeq || !visualRedWasOn || (c.hasRedSeq && c.redSeq != visualRedSeq)))) {
+    visualPending |= RED_ALERT;
+  }
+  haveVisualSeq = true;
+  visualYellowSeq = c.yellowSeq;
+  visualRedSeq = c.redSeq;
+  visualYellowWasOn = c.visualYellowOn;
+  visualRedWasOn = c.visualRedOn;
   if (!haveSeq) {
     haveSeq = true;  // der erste Stand nach dem Start loest keinen Ton aus
   } else if (c.yellowSeq != lastSeq && c.yellowOn) {
@@ -58,6 +81,12 @@ void mute() {
 }
 
 bool muted() { return redSilenced; }
+
+uint8_t takeVisualAlerts() {
+  const uint8_t pending = visualPending;
+  visualPending = 0;
+  return pending;
+}
 
 bool active(uint32_t now) {
   if (yellowActive && reached(now, yellowUntil)) yellowActive = false;

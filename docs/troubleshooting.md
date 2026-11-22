@@ -1,10 +1,18 @@
 # Fehlersuche
 
 ## Ampel rot blinkend
-AHT20 nicht gefunden oder keine gültige Messung. SDA/SCL, Pull-ups und Anschluss `J3` prüfen; `status` im seriellen Monitor zeigt `aht=FEHLT`.
+AHT20 nicht gefunden oder keine gültige Messung. Während der ersten Messung nach dem Start kann Rot kurz blinken;
+bleibt die Anzeige bestehen, SDA/SCL, Pull-ups und Anschluss `J3` prüfen. `status` im seriellen Monitor zeigt `aht=FEHLT`.
 
 ## Ampel rot dauerhaft
 `status` zeigt die Ursache: Übertemperatur oder `I2C: AUSFALL` (MCP23017 antwortet nicht auf 0x20; die Firmware versucht alle 2 s einen Neustart).
+Bei einem Ausfall von U2 ist auch der darüber angeschlossene Pieper nicht zuverlässig verfügbar.
+
+## Schlafanforderung führt nicht zum Ausschalten
+Mindestens 5 s halten; die Töne bei 3 und 4 s warnen vor der Anforderung. Der längere Ton bei 5 s bestätigt nur,
+dass der Koffer sie vorgemerkt hat. Der Pi muss erreichbar sein und mindestens v0.41.3 verwenden; nur Taster ohne
+zugeordnete oder vorgemerkte Rolle sind betroffen. Die Anforderung wird bis zur Bestätigung im RAM gehalten, geht aber
+bei einem Neustart verloren. Ein nicht quittierter lokaler Fehler kann die Tastertöne überlagern; die rote Ampel bleibt sichtbar.
 
 ## Slots „da“ flackern
 ADC-Eingang schwebt oder Einschwingzeit zu kurz: Teiler und `C-DIV` prüfen. Bei Bedarf `ADC_SAMPLES` erhöhen.

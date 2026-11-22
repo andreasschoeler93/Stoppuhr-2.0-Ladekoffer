@@ -34,7 +34,7 @@ die tatsächliche Last geeignet sein.
 
 ## Taster aufwecken
 
-Den Quittiertaster `TRIG_ALL` mindestens 1,5 s halten (Kurzdruck quittiert weiter den Pieper). Dann werden die Magnet-Trigger
+Den Quittiertaster `TRIG_ALL` 1,5 bis unter 5 s halten und loslassen (Kurzdruck quittiert den Pieper). Dann werden die Magnet-Trigger
 in der im Pi-Dashboard konfigurierten Slot-Reihenfolge angesteuert: je 3 s lang, der nächste startet 1 s nach dem vorherigen
 (die Impulse überlappen). Jeder Trigger ist ein 2N7000: Ausgang HIGH = Trigger an, im Ruhezustand liegen die Ausgänge auf LOW. Auch per seriellem Befehl `wake`.
 Die Aufweckreihenfolge, Impulslänge und Abstand stellt man im Pi-Dashboard unter Einstellungen ein; der Koffer erhält sie in der Antwort
@@ -43,11 +43,11 @@ Die Pin-Zuordnung ist durch die Platine fest vorgegeben (Schaltplan V3, Start_A.
 Slot 1..10 = U5-Pin `11,4,12,3,13,2,14,1,15,0` (0–7 = GPA0–7, 8–15 = GPB0–7).
 Die Weckreihenfolge enthält jede Slotnummer 1 bis 10 genau einmal (Pi ab v0.41.4, Koffer-Firmware ab v0.7.21).
 
-Wird `TRIG_ALL` 5 s gehalten, fordert der Koffer den Pi auf, nicht zugeordnete Taster auszuschalten.
-Ab 3 s blinkt die gelbe Ampel und bei 3 und 4 s warnt ein kurzer Piepton. Bei 5 s bestätigt ein längerer Ton
-die **Anforderung**, nicht die erfolgreiche Abschaltung. Beim Loslassen zwischen 1,5 und 5 s werden die Taster geweckt.
-Ein Fehler hat bei der Ampel Vorrang; ein nicht quittierter lokaler Fehler auch beim Pieper. Die eigentliche Abschaltung benötigt Pi v0.41.3 oder neuer;
-ohne Verbindung bleibt die Anforderung bis zur Bestätigung durch den Pi im RAM vorgemerkt.
+Wird `TRIG_ALL` 5 s gehalten, fordert der Koffer den Pi auf, Taster ohne zugeordnete oder vorgemerkte Rolle
+auszuschalten. Die Warn- und Bestätigungssignale sowie ihre Priorität stehen unter „Ampel und Pieper“.
+Die Bestätigung gilt nur für die **Anforderung**, nicht für die erfolgreiche Abschaltung. Diese benötigt Pi v0.41.3
+oder neuer. Ohne Verbindung bleibt die Anforderung bis zur Bestätigung durch den Pi im RAM vorgemerkt;
+ein Neustart des Koffers löscht sie.
 Die Firmware puffert außerdem die letzten 24 Diagnoseereignisse im RAM und überträgt den Ringpuffer mit den Statusmeldungen an den Pi (Diagnose-Download ab Pi v0.41.6); ein Neustart setzt ihn zurück. WLAN-Wiederverbindungen werden alle 5 s versucht, und die Diagnose protokolliert Abbruchgrund, Signalstärke und Kanal (ab v0.7.23).
 
 Die Spannungsmessung am Ladeausgang kann einen leeren Platz nicht sicher von einem eingesetzten Akku unterscheiden. Sie wird weiterhin für den Verlauf angezeigt, aber nicht mehr als Überspannungsfehler bewertet (ab v0.7.23).
@@ -62,34 +62,50 @@ Bei WLAN- oder Pi-Ausfall puffert der Koffer die Spannungsmessungen im RAM (bis 
 und liefert sie nach Wiederverbindung in kleinen Paketen nach. Der Pi muss dafür ab v0.41.2 laufen. Der Puffer übersteht
 keinen Neustart oder Stromausfall des Koffers; bei längeren Ausfällen werden die ältesten Werte verworfen.
 
-Den Quittiertaster unter 1,5 s drücken quittiert einen Alarm; 1,5 bis unter 5 s halten und dann loslassen weckt alle Taster.
-Wird er 5 s gehalten, fordert der Koffer den Pi auf, nur Taster ohne zugeordnete oder vorgemerkte Rolle auszuschalten
-(Pi ab v0.41.3). Die Ampel-LEDs sind aktiv-low angesteuert.
-
 ## Ampel und Pieper
 
-| Ampel | Bedeutung |
-| --- | --- |
-| Grün | kein Fehler und kein Ladevorgang (geladen oder nichts eingesetzt, nicht unterscheidbar) |
-| Gelb | mindestens ein Platz lädt (rote LED des Lademoduls) |
-| Rot dauerhaft | Übertemperatur oder MCP23017 antwortet nicht |
-| Rot blinkend | AHT20 fehlt oder liefert keine Werte |
-| Gelb blinkend | Taster wird mindestens 3 s gehalten; Schlafanforderung steht bevor |
+### Ampel
+
+| Priorität | Anzeige | Bedeutung |
+| --- | --- | --- |
+| 1 | Rot dauerhaft | Übertemperatur oder MCP23017 U2 antwortet nicht |
+| 2 | Rot blinkend | AHT20 fehlt oder liefert keine gültigen Werte |
+| 3 | Gelb blinkend | `TRIG_ALL` wird mindestens 3 s gehalten; Schlafanforderung steht bevor |
+| 4 | Gelb dauerhaft | Mindestens ein Platz lädt (rote LED des Lademoduls) |
+| 5 | Grün dauerhaft | Kein Fehler und kein Ladevorgang |
+
+Die höchste zutreffende Priorität bestimmt die Ampel, auch nach dem Quittieren eines Fehlers. Blinkend bedeutet
+je 500 ms an und aus. Die LEDs sind aktiv-low angesteuert; die externe Ampel wird über U2 gespiegelt.
 
 Das TP4056-Modul liefert nur „lädt“ (rote LED). „Taster da“ und „voll“ sind nicht erkennbar, weil der Ausgang ohne Akku bei ca. 4 V liegt.
 
-Beim Start prüft der Koffer wie bisher kurz die LEDs. Sobald die erste Temperaturmessung gültig ist, ertönen
-zwei kurze Pieptöne (je 100 ms mit 100 ms Pause). Bei einem Fehler entfällt die Startfolge; die erste
-Temperaturmessung wird direkt angestoßen und ein fehlender Messwert nach etwa einer Sekunde akustisch gemeldet.
+### Bedienung und Töne
 
-Lokale Fehler haben Vorrang vor anderen Tönen: Übertemperatur piept 200 ms pro Sekunde, ein AHT20-Fehler
-80 ms pro Sekunde und ein MCP-Ausfall 100 ms alle zwei Sekunden. Der Pieper hängt selbst am MCP und kann
-bei dessen Ausfall nicht zuverlässig warnen; die direkt angeschlossene rote LED zeigt den Fehler weiterhin an.
-Ein kurzer Druck auf `TRIG_ALL` quittiert aktuelle Alarme bis zum nächsten neuen Fehler; die Fehleranzeige bleibt bestehen.
-Dashboard-Warnungen lassen sich auch zwischen den Intervalltönen quittieren. Zusammen mit Pi v0.44.11
-bleibt eine quittierte rote Warnung bei schwankenden Messwerten still; neue Warnungen dürfen wieder piepen.
-Ab Pi v0.44.12 und Koffer v0.7.29 können eigene Übertemperatur- und MCP-Fehler auch einzeln im Dashboard
-quittiert werden. Weitere Fehler bleiben hörbar; die Ampel zeigt den Fehler weiterhin an.
+| Ereignis | Signal / Aktion |
+| --- | --- |
+| Start ohne Fehler | Nach dem LED-Test zwei Pieptöne à 100 ms mit 100 ms Pause, sobald die erste Temperaturmessung gültig ist |
+| Kurzer Tastendruck unter 1,5 s | Beim Loslassen aktuelle lokale und Dashboard-Töne quittieren; kein Bestätigungston |
+| Halten von 1,5 bis unter 5 s | Beim Loslassen alle Taster in der konfigurierten Reihenfolge wecken |
+| Halten ab 3 s | Gelb blinkt; bei 3 und 4 s ertönt jeweils ein 100-ms-Warnton |
+| Halten ab 5 s | Schlafanforderung einmalig senden und 300 ms piepsen; beim anschließenden Loslassen nicht wecken |
+| Übertemperatur | 200 ms Ton, 800 ms Pause |
+| AHT20 ohne gültigen Wert | 80 ms Ton, 920 ms Pause |
+| MCP23017 U2 ausgefallen | 100 ms Ton, 1.900 ms Pause, sofern der Pieper noch ansteuerbar ist |
+| Dashboard-Meldung | Gelb: kurzer Ton bei neuer Meldung; Rot: wiederholter Ton nach Vorgaben des Pi |
+
+Die Zeiten gelten für den entprellten Taster (40 ms Entprellung) und sind Näherungswerte. Ein **nicht quittierter
+lokaler Fehler** hat beim Pieper Vorrang vor Start-, Taster- und Dashboard-Tönen, auch in den Tonpausen. Bei mehreren
+nicht quittierten lokalen Fehlern gilt die Reihenfolge Übertemperatur, AHT20, MCP U2. Bei einem Fehler entfällt die
+Startfolge; sie wird auch nicht nachgeholt, wenn die erste gültige Temperaturmessung erst nach einer Sekunde eintrifft.
+Die erste Temperaturmessung wird direkt angestoßen und ein fehlender Messwert nach etwa einer Sekunde akustisch
+gemeldet. Die Ampel kann während des Wartens bereits rot blinken.
+
+Der Pieper hängt selbst an U2 und kann bei dessen Ausfall nicht zuverlässig warnen; die direkt angeschlossene rote
+LED zeigt den Fehler weiterhin an. Quittierte Fehler bleiben sichtbar; neu auftretende Fehler sind wieder hörbar.
+Dashboard-Warnungen lassen sich auch zwischen den Intervalltönen quittieren. Zusammen mit Pi v0.44.11 bleibt eine
+quittierte rote Warnung bei schwankenden Messwerten still; neue Warnungen dürfen wieder piepen. Ohne frische Antwort
+vom Pi verstummt der rote Dashboard-Ton nach 60 s. Ab Pi v0.44.12 und Koffer v0.7.29 können Übertemperatur- und
+MCP-Fehler auch einzeln im Dashboard quittiert werden; andere nicht quittierte Fehler bleiben hörbar.
 
 ## Bauen und flashen
 
@@ -120,6 +136,18 @@ und startet neu. Nach einem Fehler wartet er 5 Minuten bis zum nächsten Versuch
 Die erste Version mit Update muss einmal per USB geflasht werden.
 Die `firmware.bin` darf höchstens 1.310.720 Bytes groß sein (eine OTA-Partition, `min_spiffs.csv`); der Pi lehnt größere Dateien ab.
 Vor jedem Tag die Größe prüfen und bei Bedarf Code einsparen (z. B. kein `sscanf`/`printf` mit Fließkomma).
+
+### Release veröffentlichen
+
+1. Version in `src/config.h` und README sowie den Eintrag in `CHANGELOG.md` aktualisieren und die Änderungen committen.
+2. `pio run -e seeed_xiao_esp32c3` ausführen und die Größe von `.pio/build/seeed_xiao_esp32c3/firmware.bin` prüfen.
+   Ein lokaler Build kann Zugangsdaten aus `src/secrets.h` enthalten und darf nicht als öffentliche Release-Datei hochgeladen werden.
+3. Den Commit zum gewünschten GitHub-Branch pushen. Ein Versions-Tag auf diesem Commit erstellen und pushen,
+   z. B. `git tag v0.7.30` und `git push origin v0.7.30`. Der Tag muss mit der Firmware-Version übereinstimmen.
+4. Den GitHub-Actions-Lauf „Release“ abwarten und das veröffentlichte Release samt `firmware.bin` prüfen.
+   Der Workflow baut aus dem getaggten Repository-Stand ohne die lokale `src/secrets.h`; auch die veröffentlichte
+   Datei muss das OTA-Größenlimit einhalten. Erst danach die Version im Pi-Dashboard auswählen und bereitstellen.
+
 ### Startkontakte beim Taster-Update (ab v0.7.17)
 
 Aktualisiert der Pi (ab v0.36.0) gerade Taster, steht in seiner Antwort auf `POST /api/charger` die Restzeit `ota_hold_ms`.

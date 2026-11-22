@@ -27,4 +27,6 @@ STAT ist an der roten LED des TP4056-Moduls angelötet, nicht am CHRG-Pin des Ch
 
 ## Taster TRIG_ALL
 
-`INPUT_PULLUP`, Taster gegen GND. Kurzer Druck quittiert den Pieper (nur bei aktivem Fehler); Halten ab 1,5 s weckt die Taster (siehe README).
+`INPUT_PULLUP`, Taster gegen GND. Kurzer Druck quittiert aktive lokale und Dashboard-Töne. 1,5 bis unter 5 s halten
+und loslassen weckt die Taster; ab 5 s wird eine Schlafanforderung für nicht zugeordnete Taster ausgelöst.
+Warnsignale, Prioritäten und Voraussetzungen stehen im [README](../README.md#ampel-und-pieper).
